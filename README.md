@@ -24,6 +24,8 @@ docker compose up
 | Fake provider | http://localhost:8001 (`/_control`, `/_stats`, `/_reset`) |
 | Review page | http://localhost:5173 |
 
+If you already run Postgres or Redis locally, set `DB_PORT` and `REDIS_PORT` in `.env` to free ports.
+
 `docker compose up` starts `db`, `redis`, `provider`, `api` (runs the migrations and an idempotent seed first), `worker` (2 replicas) and `web`. The seed creates `ws_verified` (users `admin_v`, `member_v`) and `ws_unverified` (users `admin_u`, `member_u`). `SCREENING_MODE=broken` in `.env` switches the workers to the deliberately unsafe v0.
 
 ### Tests
@@ -162,7 +164,14 @@ Every log line is JSON with `workspace_id`, `media_id`, `job_id`, `attempt`, `la
 
 ## 6. Limits and what's unfinished
 
-- **I haven't run `docker compose up` end to end myself yet.** The machine I built on couldn't pull base images from Docker Hub. What I did check from a clean clone: the API and provider install from their committed lockfiles and import, the web app installs from its frozen lockfile and builds, the compose file validates, and the compose start sequence (migrations, seed, server, 2 workers) ran the whole time I was testing against local Postgres 16 and Redis 7.
+- `docker compose up` was verified from a clean build (`docker compose build --no-cache`) on macOS with Docker 29.6 and Compose 5.3. All services came up healthy, and a smoke run against the stack checked:
+  - a clean image is published
+  - a 60-frame video with explicit content on frame 55 is blocked in the unverified workspace and published in the verified one (over the async callback)
+  - a refused prompt gets 422
+  - workspace isolation (404), member review (403) and an unsigned callback (401)
+  - an outage holds an upload, approving that hold gets 409, and the upload is published after recovery
+  - unchecked published stays 0
+  I did not re-run the full workload inside compose; that ran against the same code on local Postgres 16 and Redis 7.
 - The prompt gate is rules only. It misses paraphrase and other languages, and it will over-block some innocent text. Production needs a classifier (see Part 3).
 - The workspace in-flight cap is soft. Two simultaneous claims can briefly exceed it. It's about fairness, not safety.
 - In a quiet outage, held items come back up to 30 s after the provider recovers (the probe window). With traffic, it's about 2 s.

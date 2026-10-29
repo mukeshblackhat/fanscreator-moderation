@@ -20,6 +20,7 @@ Nothing was marked done without running it. The outputs are committed in [`docs/
   - One item was traced through an outage and recovery (`trace-outage-recovery.txt`).
   - The workload ran against both versions.
   - The crash test was run against the live stack.
+- **Compose from clean.** `docker compose build --no-cache` and `docker compose up` on macOS (Docker 29.6, Compose 5.3). Every service was healthy, and a smoke run covered publish, block over the async callback, the refused prompt (422), isolation (404/403/401), and an outage hold with 409 on approve and automatic recovery. Unchecked published stayed 0.
 - **Ledger against the provider.** The ledger was compared with the provider's own call counts, and successful scores per media were counted in the database (722 of 722 exactly once).
 
 ## Mistakes that were caught
@@ -34,7 +35,7 @@ The running log, with what was wrong and what changed, is [`docs/ai-log.md`](doc
 
 ## Not verified
 
-- **`docker compose up` from clean has not been run end to end.** The build machine couldn't pull base images from Docker Hub. The steps inside each Dockerfile were run from a clean clone instead: installs from the committed lockfiles, imports, the web build, and `docker compose config`.
+- The full workload and the crash test were run against local services, not inside `docker compose` (compose itself was verified with a clean build and a smoke run, see below).
 - Behaviour under a real network partition, an OOM kill mid-commit, a Postgres failover, or clock skew (see the crash test section of the README).
 - Prompt gate quality beyond the 30 listed cases. Rules are weak by nature.
 - Vendor prices in Part 3 are list prices checked in October 2026, not quotes.
