@@ -1,9 +1,9 @@
 """Worker entrypoint: `python -m app.screening.worker`.
 
 SCREENING_MODE=broken runs the deliberately unsafe v0 handler.
-SCREENING_MODE=fixed runs the safe pipeline. Until the fix commits land it
-claims nothing, so every upload stays pending and invisible. That is the
-fail-closed default: no screening means nothing goes live.
+SCREENING_MODE=fixed runs the safe pipeline: separate loops per lane
+(image, video, rescreen) with their own concurrency, plus the re-screen and
+callback-watchdog loop.
 """
 import asyncio
 import os
@@ -23,10 +23,18 @@ async def run(worker_id: str) -> None:
 
         await broken_handler.run(worker_id)
         return
-    log.warning("fixed_pipeline_not_built_yet", worker_id=worker_id,
-                note="jobs stay pending until the fix commits; nothing is published")
-    while True:
-        await asyncio.sleep(5)
+    from app.screening import pipeline, rescreen
+
+    lanes = [("image", settings.image_concurrency), ("video", settings.video_concurrency),
+             ("rescreen", settings.rescreen_concurrency)]
+    tasks = [asyncio.create_task(pipeline.lane_loop(lane, f"{worker_id}/{lane}{i}"))
+             for lane, n in lanes for i in range(n)]
+    tasks.append(asyncio.create_task(rescreen.loop()))
+    try:
+        await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            task.cancel()
 
 
 async def main() -> None:

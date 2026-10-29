@@ -18,6 +18,29 @@ class Settings(BaseSettings):
     hold_after_seconds: float = 20.0
     lease_seconds: int = 60
     workspace_inflight_cap: int = 4
+
+    # Worker concurrency per lane, per worker process
+    image_concurrency: int = 4
+    video_concurrency: int = 2
+    rescreen_concurrency: int = 1
+
+    # Retry budgets (counted per job from the provider_calls ledger)
+    max_failure_attempts: int = 3      # timeouts and 5xx
+    max_rate_limited_attempts: int = 10
+    max_malformed_attempts: int = 2
+    backoff_base_seconds: float = 0.5
+    backoff_cap_seconds: float = 10.0
+
+    # Circuit breaker
+    breaker_failure_threshold: int = 5
+    breaker_window_seconds: float = 30.0
+    breaker_open_seconds: float = 10.0
+
+    # Recovery
+    rescreen_interval_seconds: float = 5.0
+    rescreen_batch_size: int = 20       # per tick, so recovery does not cause a 429 storm
+    rescreen_probe_window_seconds: float = 30.0
+    callback_timeout_seconds: float = 120.0  # resubmit an async video if no callback by then
     cors_origins: str = "http://localhost:5173"
     log_level: str = "INFO"
 

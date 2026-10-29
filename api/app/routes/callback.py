@@ -26,6 +26,8 @@ async def provider_callback(request: Request, x_signature: str | None = Header(d
         raise HTTPException(status_code=401, detail="Invalid signature")
     try:
         payload = json.loads(body)
+        if not isinstance(payload, dict):
+            raise ValueError("not an object")
     except ValueError:
         raise HTTPException(status_code=400, detail="Body is not JSON") from None
 
@@ -33,7 +35,9 @@ async def provider_callback(request: Request, x_signature: str | None = Header(d
         from app.screening import broken_handler
 
         await broken_handler.process_callback(payload)
-    else:
-        # Fixed pipeline lands in step 4. Until then the media stays pending (fail closed).
-        log.info("callback_received_not_processed", provider_job_id=payload.get("provider_job_id"))
-    return {"status": "ok"}
+        return {"status": "ok"}
+
+    from app.screening import pipeline
+
+    result = await pipeline.process_callback(payload, hashlib.sha256(body).hexdigest())
+    return {"status": "ok", "result": result}

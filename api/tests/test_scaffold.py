@@ -73,8 +73,26 @@ async def test_db_refuses_published_with_non_publish_decision(db):
     await db.rollback()
 
 
+async def _insert_scores(db, media_id, n: int) -> None:
+    await db.execute(text("INSERT INTO scores (media_id, frames) VALUES (:m, CAST(:f AS jsonb))"),
+                     {"m": media_id, "f": "[" + ",".join(["{}"] * n) + "]"})
+
+
+async def test_db_refuses_published_when_decision_lies_about_coverage(db):
+    """v0 wrote frames_scored = frame_count after scoring 8 frames. Stored scores expose it."""
+    media_id = await _insert_media(db, frame_count=60)
+    await _insert_scores(db, media_id, 8)
+    decision_id = await _insert_decision(db, media_id, "published", scored=60, count=60)
+    with pytest.raises(DBAPIError, match="scores cover 8 of 60 frames"):
+        await db.execute(text(
+            "UPDATE media SET status = 'published', decision_id = :d WHERE id = :id"
+        ), {"id": media_id, "d": decision_id})
+    await db.rollback()
+
+
 async def test_db_allows_published_with_complete_decision(db):
     media_id = await _insert_media(db)
+    await _insert_scores(db, media_id, 3)
     decision_id = await _insert_decision(db, media_id, "published", scored=3, count=3)
     await db.execute(text(
         "UPDATE media SET status = 'published', decision_id = :d WHERE id = :id"

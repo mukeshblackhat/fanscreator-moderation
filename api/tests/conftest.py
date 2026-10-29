@@ -156,9 +156,10 @@ async def _clean_media() -> None:
 async def workers(provider):
     """Start N in-process workers for the configured mode on a clean queue.
     Usage: `await workers(2)`. All are cancelled when the test ends."""
-    from app.screening import worker
+    from app.screening import breaker, worker
 
     await _clean_media()
+    await breaker.reset()
     tasks: list[asyncio.Task] = []
 
     async def start(n: int = 2) -> None:

@@ -14,6 +14,7 @@ async def test_provider_timeout_never_publishes(api, provider, workers, monkeypa
     from app.config import settings
 
     monkeypatch.setattr(settings, "provider_timeout_seconds", 0.3)
+    monkeypatch.setattr(settings, "rescreen_interval_seconds", 60)  # keep it held while we look
     await provider.post("/_control", json={"mode": "timeout"})
     await workers(2)
     media_id = await upload(api, ADMIN_U, image({"minor": 0.95}))
