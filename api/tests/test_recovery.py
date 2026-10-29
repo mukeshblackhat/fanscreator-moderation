@@ -153,3 +153,17 @@ async def test_missing_callback_is_resubmitted_and_scored_once(api, provider, db
     assert rows == 1
     assert receipts == 2
     assert await provider_calls(provider, media_id) == 2
+
+
+async def test_malformed_async_callback_is_retried_once_then_held(api, provider, db, workers, quick):
+    """Bad answers that arrive by callback count against the same budget as sync ones.
+    Before this fix a provider sending bad callbacks was called forever."""
+    await provider.post("/_control", json={"mode": "malformed", "callback_delay_ms": 50})
+    await workers(1)
+    media_id = await upload(api, ADMIN_V, video(40))  # > 30 frames: async callback
+    final, seen = await wait_final(api, ADMIN_V, media_id, timeout=20)
+    assert final == "held" and "published" not in seen
+    assert await held_kind(api, ADMIN_V, media_id) == "provider_malformed"
+    await asyncio.sleep(1.0)
+    assert await ledger(db, media_id) == {"malformed": 2}
+    assert await provider_calls(provider, media_id) == 2

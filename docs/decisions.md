@@ -106,3 +106,15 @@ Measured with the workload: about 360 items were held during the 40 s outage. At
 
 ## 30. Crash hook is an env flag, off by default
 `CRASH_AFTER_PROVIDER=1` makes a worker call `os._exit(137)` right after a successful provider answer, before anything is recorded. It exists only for `scripts/crash_test.py`. Compose never sets it.
+
+## 31. Real uploads are an opt-in profile with their own provider
+The task asks for no real images, so the graded path keeps the fake provider. Real uploads go to a second service, `provider_real`, which has the same `/score` contract. Nothing in the safety pipeline changed: the worker sends frames that carry an `image` path to the real provider, and everything else (retries, breaker, holds, recovery, every frame counting) applies as before. The service sits behind the `real` Compose profile, because torch and the model add about 1 GB.
+
+## 32. What real mode can and cannot check
+The local model only knows normal vs nsfw, so it supplies `explicit`. OpenAI moderation, when a key is set, adds self-harm and a sexual-violence heuristic. Age, real person and animals come back as 0 on real files and the page says so. A real platform needs specialised models for those, plus CSAM hash matching in front of everything. The minor category is never to be tested with real images.
+
+## 33. The real provider always answers by callback and fails closed
+CPU scoring can take longer than the 2 s sync timeout, so the real provider always returns 202 and posts a signed callback. If any frame fails (unreadable file, OpenAI error), the callback carries an error and no frames. The API counts that as a malformed answer: one retry, then held as `provider_malformed`. A partial answer is never used.
+
+## 34. Frames are served by role and status, never for blocked media
+`GET /media/{id}/frames/{n}`: published is visible to members of that workspace, and score holds to its admins (who have to see an item to review it). Pending, blocked and unscreened media returns 404 to everyone. Responses are `private, no-store`. Originals are deleted after frame extraction, so only the normalised frames that were scored are kept.

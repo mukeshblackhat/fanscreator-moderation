@@ -37,7 +37,19 @@ FAILURE_OUTCOMES = {"timeout", "server_error"}
 
 
 def _scores_only(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{"scores": f.get("scores", {}) or {}} for f in frames]
+    """What the provider gets per frame: the synthetic scores, plus the stored
+    image path for real uploads."""
+    out = []
+    for f in frames:
+        frame: dict[str, Any] = {"scores": f.get("scores", {}) or {}}
+        if f.get("image"):
+            frame["image"] = f["image"]
+        out.append(frame)
+    return out
+
+
+def is_real_upload(frames: list[dict[str, Any]]) -> bool:
+    return any(f.get("image") for f in frames)
 
 
 # ---------------------------------------------------------------- final writes
@@ -193,11 +205,14 @@ async def process(job: ClaimedJob, worker_id: str = "") -> None:
             await _maybe_hold_for_outage(job)
             return
 
-        kind = "sync" if job.frame_count <= SYNC_FRAME_LIMIT else "async_submit"
+        real = is_real_upload(job.frames)
+        kind = "async_submit" if real or job.frame_count > SYNC_FRAME_LIMIT else "sync"
         call_id = await open_call(job, kind)
-        with structlog.contextvars.bound_contextvars(provider_call_id=str(call_id)):
+        with structlog.contextvars.bound_contextvars(provider_call_id=str(call_id),
+                                                     provider="real" if real else "fake"):
             outcome = await provider_client.score(
-                str(job.media_id), _scores_only(job.frames), callback_url=settings.callback_url)
+                str(job.media_id), _scores_only(job.frames), callback_url=settings.callback_url,
+                base_url=settings.real_provider_url if real else None)
             if settings.crash_after_provider and outcome.kind in ("ok", "accepted"):
                 log.warning("crash_after_provider", note="CRASH_AFTER_PROVIDER=1: exiting before the save")
                 os._exit(137)  # the provider scored (and billed) it; we die before recording anything
@@ -300,6 +315,8 @@ async def process_callback(payload: dict[str, Any], body_sha256: str) -> str:
             log.info("callback_after_decision", status=media["status"])
             return "already_decided"
         try:
+            if payload.get("error"):
+                raise MalformedResponse(f"provider reported: {payload['error']}")
             frames = validate_frames(payload, media["frame_count"])
         except MalformedResponse as exc:
             log.error("provider_malformed", error=str(exc), via="callback")
@@ -310,20 +327,40 @@ async def process_callback(payload: dict[str, Any], body_sha256: str) -> str:
 
 
 async def _requeue_after_bad_callback(media_id: uuid.UUID, error: str) -> None:
+    """A bad async answer counts against the malformed budget of its job, exactly
+    like a bad sync answer: retry once, then hold as provider_malformed."""
     async with SessionLocal() as session, session.begin():
+        job = (await session.execute(text(
+            "SELECT id FROM jobs WHERE media_id = :m AND state = 'waiting_callback' FOR UPDATE"
+        ), {"m": media_id})).first()
+        await session.execute(text(
+            "UPDATE provider_calls SET outcome = 'malformed' WHERE media_id = :m AND outcome = 'accepted'"
+        ), {"m": media_id})
+        if job is None:
+            return
+        malformed = (await session.execute(text(
+            "SELECT count(*) FROM provider_calls WHERE job_id = :j AND outcome = 'malformed'"
+        ), {"j": job.id})).scalar_one()
+        if malformed >= settings.max_malformed_attempts:
+            await session.execute(text(
+                """
+                UPDATE media SET status = 'held', held_reason_kind = 'provider_malformed',
+                       rescreen_pending = false, reasons = '["provider_malformed"]'::jsonb
+                WHERE id = :m AND status = 'pending'
+                """
+            ), {"m": media_id})
+            await session.execute(text(
+                "UPDATE jobs SET state = 'dead', last_error = :e, updated_at = now() WHERE id = :j"
+            ), {"j": job.id, "e": f"malformed_callback:{error}"[:300]})
+            log.error("media_held", held_reason_kind="provider_malformed", reason="provider_malformed", via="callback")
+            return
         await session.execute(text(
             """
             UPDATE jobs SET state = 'queued', run_at = now(), provider_job_id = NULL,
                    last_error = :e, updated_at = now()
-            WHERE media_id = :m AND state = 'waiting_callback'
+            WHERE id = :j
             """
-        ), {"m": media_id, "e": f"malformed_callback:{error}"[:300]})
-        # Count it against the malformed budget for that job.
-        await session.execute(text(
-            """
-            UPDATE provider_calls SET outcome = 'malformed' WHERE media_id = :m AND outcome = 'accepted'
-            """
-        ), {"m": media_id})
+        ), {"j": job.id, "e": f"malformed_callback:{error}"[:300]})
 
 
 # ---------------------------------------------------------------- worker loops

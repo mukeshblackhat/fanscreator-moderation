@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiFetch, type Identity } from "./api";
+import { Frame, flaggedFrame } from "./Frame";
 import { ago, HELD_KIND, Reasons } from "./labels";
+import type { MediaRow } from "./MediaList";
 
 export type ReviewItem = {
   id: string;
@@ -24,6 +26,15 @@ export function ReviewQueue({ who }: { who: Identity }) {
     refetchInterval: 3000,
     retry: false, // errors show at once with a Retry button; the queue also refreshes every 3 s
   });
+
+  // Which held items are real files (to show their flagged frame). Same cache as the All media tab.
+  const media = useQuery({
+    queryKey: ["media", who.userId, who.workspaceId],
+    queryFn: () => apiFetch<MediaRow[]>("/media?limit=100", who),
+    refetchInterval: 3000,
+    enabled: query.isSuccess,
+  });
+  const withImages = new Set((media.data ?? []).filter((m) => m.has_images).map((m) => m.id));
 
   const act = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
@@ -116,8 +127,15 @@ export function ReviewQueue({ who }: { who: Identity }) {
               return (
                 <tr key={item.id}>
                   <td>
-                    <code>{item.id.slice(0, 8)}</code>
-                    <div className="sub">{ago(item.created_at)}</div>
+                    <div className="media-cell">
+                      {withImages.has(item.id) && item.held_reason_kind === "score" && (
+                        <Frame who={who} mediaId={item.id} index={flaggedFrame(item.reasons)} sensitive />
+                      )}
+                      <div>
+                        <code>{item.id.slice(0, 8)}</code>
+                        <div className="sub">{ago(item.created_at)}</div>
+                      </div>
+                    </div>
                   </td>
                   <td>
                     <Reasons reasons={item.reasons} />

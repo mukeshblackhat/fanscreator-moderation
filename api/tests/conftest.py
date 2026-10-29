@@ -14,8 +14,12 @@ import sys
 import time
 from pathlib import Path
 
+import tempfile
+
 API_PORT = 18000
 PROVIDER_PORT = 18001
+REAL_PROVIDER_PORT = 18002
+MEDIA_STORE = tempfile.mkdtemp(prefix="media-store-")
 TEST_DB = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://moderation:moderation@localhost:5432/moderation_test"
 )
@@ -24,6 +28,10 @@ os.environ["DATABASE_URL"] = TEST_DB
 os.environ.setdefault("SCREENING_MODE", "fixed")
 os.environ["PROVIDER_URL"] = f"http://localhost:{PROVIDER_PORT}"
 os.environ["CALLBACK_URL"] = f"http://localhost:{API_PORT}/provider/callback"
+os.environ["REAL_PROVIDER_URL"] = f"http://localhost:{REAL_PROVIDER_PORT}"
+os.environ["MEDIA_STORE"] = MEDIA_STORE
+os.environ["REAL_MODEL"] = "stub"  # deterministic stand-in: mostly red image = explicit 0.95
+os.environ.setdefault("MAX_VIDEO_SECONDS", "20")
 os.environ.setdefault("PROVIDER_WEBHOOK_SECRET", "test-secret")
 os.environ.setdefault("PROVIDER_TIMEOUT_SECONDS", "4")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
@@ -34,8 +42,10 @@ from sqlalchemy import text  # noqa: E402
 
 API_DIR = Path(__file__).resolve().parents[1]
 PROVIDER_DIR = API_DIR.parent / "provider"
+REAL_PROVIDER_DIR = API_DIR.parent / "provider_real"
 API_URL = f"http://localhost:{API_PORT}"
 PROVIDER_URL = f"http://localhost:{PROVIDER_PORT}"
+REAL_PROVIDER_URL = f"http://localhost:{REAL_PROVIDER_PORT}"
 MODE = os.environ["SCREENING_MODE"]
 
 ADMIN_V = {"X-User-Id": "admin_v", "X-Workspace-Id": "ws_verified"}
@@ -56,8 +66,8 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"SCREENING_MODE={MODE}  database={TEST_DB.rsplit('/', 1)[-1]}"
 
 
-def _provider_python() -> str:
-    venv = PROVIDER_DIR / ".venv" / "bin" / "python"
+def _provider_python(folder: Path = PROVIDER_DIR) -> str:
+    venv = folder / ".venv" / "bin" / "python"
     return str(venv) if venv.exists() else sys.executable
 
 
@@ -83,15 +93,19 @@ def services():
     provider = subprocess.Popen(
         [_provider_python(), "-m", "uvicorn", "provider.main:app", "--port", str(PROVIDER_PORT)],
         cwd=PROVIDER_DIR, env=env, stdout=open(logs / "provider.log", "w"), stderr=subprocess.STDOUT)
+    real = subprocess.Popen(
+        [_provider_python(REAL_PROVIDER_DIR), "-m", "uvicorn", "realprovider.main:app", "--port", str(REAL_PROVIDER_PORT)],
+        cwd=REAL_PROVIDER_DIR, env=env, stdout=open(logs / "real-provider.log", "w"), stderr=subprocess.STDOUT)
     api = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(API_PORT)],
         cwd=API_DIR, env=env, stdout=open(logs / "api.log", "w"), stderr=subprocess.STDOUT)
     try:
         _wait_healthy(PROVIDER_URL, provider, "provider")
+        _wait_healthy(REAL_PROVIDER_URL, real, "real provider")
         _wait_healthy(API_URL, api, "api")
         yield
     finally:
-        for proc in (api, provider):
+        for proc in (api, provider, real):
             proc.terminate()
             try:
                 proc.wait(timeout=5)

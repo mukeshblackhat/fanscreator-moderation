@@ -73,11 +73,12 @@ async def score(
     callback_url: str | None = None,
     timeout: float | None = None,
     validate: bool = True,
+    base_url: str | None = None,
 ) -> ProviderOutcome:
     payload = {"media_id": media_id, "frames": frames, "callback_url": callback_url}
     seconds = timeout if timeout is not None else settings.provider_timeout_seconds
     try:
-        async with httpx.AsyncClient(base_url=settings.provider_url, timeout=httpx.Timeout(seconds)) as client:
+        async with httpx.AsyncClient(base_url=base_url or settings.provider_url, timeout=httpx.Timeout(seconds)) as client:
             response = await client.post("/score", json=payload)
     except httpx.TimeoutException as exc:
         return ProviderOutcome("timeout", error=type(exc).__name__)

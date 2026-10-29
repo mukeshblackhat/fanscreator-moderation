@@ -71,7 +71,8 @@ async def list_media(
     rows = (await session.execute(text(
         """
         SELECT id, status, reasons, type, source, prompt, frame_count, is_explicit,
-               held_reason_kind, created_at, updated_at
+               held_reason_kind, created_at, updated_at,
+               (frames -> 0 ->> 'image') IS NOT NULL AS has_images
         FROM media WHERE workspace_id = :ws
         ORDER BY created_at DESC LIMIT :limit
         """

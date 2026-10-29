@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://moderation:moderation@localhost:5432/moderation"
     redis_url: str = "redis://localhost:6379/0"
     provider_url: str = "http://localhost:8001"
+    # Real uploads (optional "real" compose profile)
+    real_provider_url: str = "http://localhost:8002"
+    media_store: str = "/media-store"
+    max_image_mb: int = 25
+    max_video_mb: int = 200
+    max_video_seconds: int = 120
     callback_url: str = "http://localhost:8000/provider/callback"
     provider_webhook_secret: str = "change-me-in-real-life"
     screening_mode: Literal["fixed", "broken"] = "fixed"

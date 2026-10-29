@@ -15,7 +15,8 @@ const HELD: ReviewItem = {
   held_reason_kind: "score",
 };
 
-const server = setupServer();
+// The queue also asks /media which held items are real files; default to none.
+const server = setupServer(http.get(`${API_URL}/media`, () => HttpResponse.json([])));
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());

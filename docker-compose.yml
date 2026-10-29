@@ -4,10 +4,13 @@ x-api-env: &api-env
   DATABASE_URL: postgresql+asyncpg://moderation:moderation@db:5432/moderation
   REDIS_URL: redis://redis:6379/0
   PROVIDER_URL: http://provider:8001
+  REAL_PROVIDER_URL: http://real-provider:8002
+  MEDIA_STORE: /media-store
   CALLBACK_URL: http://api:8000/provider/callback
   PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-change-me-in-real-life}
   SCREENING_MODE: ${SCREENING_MODE:-fixed}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CALLBACK_TIMEOUT_SECONDS: ${CALLBACK_TIMEOUT_SECONDS:-300}
 
 services:
   db:
@@ -44,9 +47,29 @@ services:
       timeout: 3s
       retries: 30
 
+  # Optional: real uploads scored by a local open-source model (+ OpenAI moderation if
+  # OPENAI_API_KEY is set). Off by default; turn on with COMPOSE_PROFILES=real in .env
+  # or `docker compose --profile real up`. First build downloads torch and the model (~1 GB).
+  real-provider:
+    build: ./provider_real
+    profiles: ["real"]
+    environment:
+      PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-change-me-in-real-life}
+      MEDIA_STORE: /media-store
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes: [media-store:/media-store:ro]
+    ports: ["8002:8002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 60s
+
   api:
     build: ./api
     environment: *api-env
+    volumes: [media-store:/media-store]
     # Migrations and the idempotent seed run before the server starts.
     command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports: ["8000:8000"]
@@ -79,3 +102,4 @@ services:
 
 volumes:
   pgdata:
+  media-store:

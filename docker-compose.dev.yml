@@ -15,6 +15,7 @@ services:
       - ./api/app:/srv/app
       - ./api/migrations:/srv/migrations
       - ./scripts:/srv/scripts
+      - media-store:/media-store
 
   worker:
     command: watchfiles --filter python "python -m app.screening.worker" app
@@ -29,6 +30,14 @@ services:
       <<: *poll
     volumes:
       - ./provider/provider:/srv/provider
+
+  real-provider:
+    command: uvicorn realprovider.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir realprovider
+    environment:
+      <<: *poll
+    volumes:
+      - ./provider_real/realprovider:/srv/realprovider
+      - media-store:/media-store:ro
 
   web:
     command: pnpm exec vite --host 0.0.0.0 --port 5173

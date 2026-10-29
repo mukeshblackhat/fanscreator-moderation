@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ApiError, apiFetch, PROVIDER_URL, type Identity } from "./api";
 import { Reasons } from "./labels";
+import { Upload } from "./Upload";
 
 type Preset = { label: string; hint: string; body: () => unknown };
 
@@ -80,11 +81,13 @@ export function TryIt({ who }: { who: Identity }) {
 
   return (
     <div className="grid2">
+      <div>
+      <Upload who={who} />
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>Upload test media as {who.userId}</h2>
-            <p>Scores are part of the payload (there is no real classifier). Watch the result in All media.</p>
+            <h2>Synthetic test media as {who.userId}</h2>
+            <p>Scores are written into the payload and go to the fake provider. Good for categories real mode cannot check.</p>
           </div>
         </div>
         <div className="card-body">
@@ -98,6 +101,7 @@ export function TryIt({ who }: { who: Identity }) {
           </div>
         </div>
       </section>
+      </div>
 
       <div>
         <section className="card">
@@ -118,8 +122,8 @@ export function TryIt({ who }: { who: Identity }) {
               ))}
             </div>
             <p className="sub" style={{ marginBottom: 0 }}>
-              During an outage, uploads are held as “Waiting for provider”. Switch back to Healthy and they re-screen by
-              themselves, usually within 30 s.
+              Controls the fake provider used by the synthetic buttons. During an outage those uploads are held as
+              “Waiting for provider”; switch back to Healthy and they re-screen by themselves, usually within 30 s.
             </p>
           </div>
         </section>

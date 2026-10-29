@@ -1,0 +1,26 @@
+[project]
+name = "real-provider"
+version = "0.1.0"
+description = "Real moderation provider: local open-source image model, optional OpenAI moderation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "pillow>=10.4",
+]
+
+[project.optional-dependencies]
+# The local model. Installed in the Docker image; not needed for the tests (they use REAL_MODEL=stub).
+model = ["transformers>=4.44", "torch>=2.4"]
+
+[dependency-groups]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]

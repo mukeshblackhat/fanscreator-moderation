@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, apiFetch, type Identity } from "./api";
+import { Frame, flaggedFrame } from "./Frame";
 import { ago, HELD_KIND, Reasons, StatusBadge } from "./labels";
 
 export type MediaRow = {
@@ -13,6 +14,7 @@ export type MediaRow = {
   is_explicit: boolean;
   held_reason_kind: string | null;
   created_at: string;
+  has_images?: boolean;
 };
 
 export function MediaList({ who }: { who: Identity }) {
@@ -64,9 +66,21 @@ export function MediaList({ who }: { who: Identity }) {
             {q.data.map((m) => (
               <tr key={m.id}>
                 <td>
-                  <strong>{m.type === "video" ? `Video · ${m.frame_count}s` : "Image"}</strong>
-                  <div className="sub">
-                    <code>{m.id.slice(0, 8)}</code> · {ago(m.created_at)}
+                  <div className="media-cell">
+                    {m.has_images && (m.status === "published" || (m.status === "held" && m.held_reason_kind === "score" && who.role === "admin")) && (
+                      <Frame who={who} mediaId={m.id} index={flaggedFrame(m.reasons)} sensitive={m.status !== "published" || m.is_explicit} />
+                    )}
+                    {m.has_images && m.status !== "published" && !(m.status === "held" && m.held_reason_kind === "score" && who.role === "admin") && (
+                      <div className="thumb-none" style={{ width: 72, height: 72, borderRadius: 8, flex: "none" }}
+                        title="Pending, blocked and unscreened media is never shown">{m.status === "blocked" ? "blocked" : "hidden"}</div>
+                    )}
+                    <div>
+                      <strong>{m.type === "video" ? `Video · ${m.frame_count}s` : "Image"}</strong>
+                      {m.has_images && <span className="chip info" style={{ marginLeft: ".4rem" }}>real file</span>}
+                      <div className="sub">
+                        <code>{m.id.slice(0, 8)}</code> · {ago(m.created_at)}
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td>

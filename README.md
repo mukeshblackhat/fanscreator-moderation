@@ -37,6 +37,18 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api python /
 
 The API and provider reload on save, the workers restart on any Python change, and the review page hot-reloads. `scripts/demo_data.py` fills both workspaces through the real pipeline (add `--outage` to also see held items recover by themselves). The review page has three tabs: the review queue, all media with readable reasons, and **Try it**, which has one-click test uploads and switches for the fake provider's mode (healthy, outage, 500s, slow, 429, bad answers).
 
+### Real uploads (optional)
+
+The graded service uses the fake provider. To screen real files as well, turn on the `real` profile (`COMPOSE_PROFILES=real` in `.env`) and upload from the **Try it** tab.
+
+- **Primary scorer:** a local open-source image model (`Falconsai/nsfw_image_detection`, a ViT for normal vs nsfw). It runs on CPU in the `real-provider` container, so files never leave the machine.
+- **Optional second opinion:** OpenAI `omni-moderation-latest`, if `OPENAI_API_KEY` is set. It adds self-harm, and sexual violence as a heuristic (sexual and violent at once). For explicit, it takes the higher of the two scores.
+- **Never checked on real files:** age (`minor`), real person, and animals. Those need specialised models, and the minor category must never be tested with real images. Use the synthetic buttons for them.
+- **How files are handled:** images are re-encoded to JPEG (max 1024 px, EXIF removed). Videos up to 2 minutes are sampled at 1 frame per second with ffmpeg, and every frame is scored. The real provider always answers through the signed callback. If anything fails while scoring, it reports an error instead of a partial answer; that is retried once and then held, never published.
+- **Who can see frames:** published media is visible to members of its workspace, and score holds are visible to workspace admins for review. Pending, blocked and unscreened media is never served. Thumbnails of held or explicit media are blurred until clicked.
+
+The first build downloads torch and the model (about 1 GB).
+
 ### Tests
 
 The API tests need a throwaway Postgres database and Redis. The harness migrates the database, then starts the real fake provider and the real API as subprocesses, so timeouts, `202`s and signed callbacks behave like they do in compose.
@@ -45,9 +57,10 @@ The API tests need a throwaway Postgres database and Redis. The harness migrates
 cd api
 uv sync
 TEST_DATABASE_URL=postgresql+asyncpg://moderation:moderation@localhost:5432/moderation_test \
-  SCREENING_MODE=fixed uv run pytest -v           # 125 tests
+  SCREENING_MODE=fixed uv run pytest -v           # 134 tests
 cd ../provider && uv sync && uv run pytest        # 5 tests
-cd ../web && pnpm install && pnpm test            # 7 tests
+cd ../provider_real && uv sync && uv run pytest   # 7 tests (stub model, no downloads)
+cd ../web && pnpm install && pnpm test            # 15 tests
 ```
 
 ### Workload, report and crash test
