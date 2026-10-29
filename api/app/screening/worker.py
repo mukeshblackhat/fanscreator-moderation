@@ -1,8 +1,10 @@
-"""Worker loop entrypoint: `python -m app.screening.worker`.
+"""Worker entrypoint: `python -m app.screening.worker`.
 
-Scaffold only. The broken v0 handler and the fixed pipeline arrive in later
-commits; for now the worker starts, checks the database, and idles so that
-`docker compose up` brings up every service."""
+SCREENING_MODE=broken runs the deliberately unsafe v0 handler.
+SCREENING_MODE=fixed runs the safe pipeline. Until the fix commits land it
+claims nothing, so every upload stays pending and invisible. That is the
+fail-closed default: no screening means nothing goes live.
+"""
 import asyncio
 import os
 import socket
@@ -20,6 +22,13 @@ async def main() -> None:
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
     log.info("worker_start", worker_id=worker_id, screening_mode=settings.screening_mode)
+    if settings.screening_mode == "broken":
+        from app.screening import broken_handler
+
+        await broken_handler.run(worker_id)
+        return
+    log.warning("fixed_pipeline_not_built_yet", worker_id=worker_id,
+                note="jobs stay pending until the fix commits; nothing is published")
     while True:
         await asyncio.sleep(5)
 

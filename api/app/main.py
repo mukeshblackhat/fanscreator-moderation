@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import engine
 from app.logging import configure_logging, log
-from app.routes import health
+from app.routes import callback, health, media, review
 
 
 @asynccontextmanager
@@ -24,4 +24,5 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(health.router)
+for module in (health, media, review, callback):
+    app.include_router(module.router)

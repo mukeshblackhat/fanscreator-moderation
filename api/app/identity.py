@@ -9,9 +9,8 @@ from dataclasses import dataclass
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_session
+from app.db import SessionLocal
 from app.models import Membership, Workspace
 
 
@@ -34,17 +33,16 @@ class Caller:
 async def get_caller(
     x_user_id: str | None = Header(default=None),
     x_workspace_id: str | None = Header(default=None),
-    session: AsyncSession = Depends(get_session),
 ) -> Caller:
     if not x_user_id or not x_workspace_id:
         raise HTTPException(status_code=401, detail="X-User-Id and X-Workspace-Id headers are required")
-    row = (
-        await session.execute(
+    # Own short-lived session, so routes can open a clean transaction on theirs.
+    async with SessionLocal() as session:
+        row = (await session.execute(
             select(Membership.role, Workspace.verified)
             .join(Workspace, Workspace.id == Membership.workspace_id)
             .where(Membership.user_id == x_user_id, Membership.workspace_id == x_workspace_id)
-        )
-    ).first()
+        )).first()
     if row is None:
         return Caller(x_user_id, x_workspace_id, None, False)
     return Caller(x_user_id, x_workspace_id, row.role, row.verified)

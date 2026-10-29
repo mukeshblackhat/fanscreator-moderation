@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { USERS, type Identity } from "./api";
+import { ReviewQueue } from "./ReviewQueue";
 
 export function App() {
   const [who, setWho] = useState<Identity>(USERS[0]);
@@ -22,7 +23,7 @@ export function App() {
           </select>
         </label>
       </header>
-      <p>The review table arrives in the next commit.</p>
+      <ReviewQueue who={who} />
     </main>
   );
 }

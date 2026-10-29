@@ -43,3 +43,18 @@ Alembic's online mode is simplest with a sync driver. `migrations/env.py` swaps 
 
 ## 9. Fake provider extras
 Beyond the required modes (`ok`, `slow`, `timeout`, `error`) the fake provider also has `rate_limit` (429 with `Retry-After: 2`), `malformed` (drops a label and a frame), `duplicate_callbacks`, `callback_delay_ms` and `POST /_reset`. They exist only so each failure path can be tested.
+
+## 10. The broken v0 handler lies in its decision row
+`broken_handler.py` records `frames_scored = frame_count` even when it scored 8 frames or none at all (timeout). That is how v0 behaved, and it is why the database guard alone is not enough: the trigger trusts the decision row. The fix will also require a `scores` row that covers every frame before a policy decision can publish.
+
+## 11. Until the fixes land, fixed mode fails closed
+Between commits, `SCREENING_MODE=fixed` claims no jobs (uploads stay `pending`, which nobody else can see) and the placeholder prompt gate refuses every prompt. An unfinished safe path should do nothing, not something unsafe.
+
+## 12. Identity uses its own database session
+The identity check runs in its own short session. Sharing the route's session auto-began a transaction, so the route's `session.begin()` failed.
+
+## 13. Non-members get 404 on upload too
+The task fixes 404 for media reads and 403 for review actions. For `POST /media` by a non-member I also return 404, so the API never confirms that a workspace exists.
+
+## 14. Generator is a counted stub
+There is no real model. `app/generator.py` counts and logs calls, so tests can prove a refused prompt never reaches it.
