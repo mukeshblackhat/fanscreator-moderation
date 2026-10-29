@@ -100,3 +100,9 @@ If traffic is low during an outage, nothing proves the provider is back until th
 
 ## 28. /metrics/summary is internal and unauthenticated
 It returns counts only (no media ids, no content). In production it would sit behind the internal network or an admin token.
+
+## 29. Re-screen pace: 50 items every 2 s
+Measured with the workload: about 360 items were held during the 40 s outage. At the earlier 20 per 5 s, recovery took about 90 s; at 50 per 2 s (about 25 a second, still far below a provider rate limit) everything was back within the recovery phase. Two re-screen workers per process.
+
+## 30. Crash hook is an env flag, off by default
+`CRASH_AFTER_PROVIDER=1` makes a worker call `os._exit(137)` right after a successful provider answer, before anything is recorded. It exists only for `scripts/crash_test.py`. Compose never sets it.

@@ -1,0 +1,51 @@
+{
+  "lease_seconds": 5,
+  "media_id": "0f03e23a-99b9-42d7-8441-57e1c9d7b7b0",
+  "worker_a_exit_code": 137,
+  "status_after_crash": "pending",
+  "ledger_after_crash": [
+    {
+      "attempt": 1,
+      "kind": "sync",
+      "outcome": "in_flight"
+    }
+  ],
+  "provider_calls_after_crash": 1,
+  "recovered_after_s": 6.0,
+  "final_status": "blocked",
+  "statuses_seen": [
+    "pending",
+    "blocked"
+  ],
+  "ledger_final": [
+    {
+      "attempt": 1,
+      "kind": "sync",
+      "outcome": "abandoned"
+    },
+    {
+      "attempt": 2,
+      "kind": "sync",
+      "outcome": "ok"
+    }
+  ],
+  "provider_calls_total": 2,
+  "scores_rows": 1,
+  "decisions": [
+    {
+      "status": "blocked",
+      "frames_scored": 20,
+      "frame_count": 20,
+      "decided_by": "policy"
+    }
+  ],
+  "checks": {
+    "worker_a_crashed_with_137": true,
+    "pending_after_crash": true,
+    "never_published": true,
+    "final_is_blocked": true,
+    "first_call_marked_abandoned": true,
+    "scored_once_in_db": true
+  },
+  "passed": true
+}

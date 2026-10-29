@@ -31,6 +31,10 @@ ROWS = [
      lambda r: f'{lat(r, "ws_unverified", "outage", "p50")} / {lat(r, "ws_unverified", "outage", "p95")}'),
     ("ws_unverified image p50 / p95, recovery",
      lambda r: f'{lat(r, "ws_unverified", "recovery", "p50")} / {lat(r, "ws_unverified", "recovery", "p95")}'),
+    ("Items whose final status differs from the full-frame policy",
+     lambda r: f'{r.get("final_vs_expected_mismatches", "n/a")}'
+               + (f' ({", ".join(f"{k}: {v}" for k, v in r["mismatch_breakdown"].items())})'
+                  if r.get("mismatch_breakdown") else "")),
     ("Final statuses", lambda r: ", ".join(f"{k} {v}" for k, v in sorted(r["final_status_counts"].items()))),
     ("Expected statuses (full-frame policy)",
      lambda r: ", ".join(f"{k} {v}" for k, v in sorted(r["expected_status_counts"].items()))),

@@ -15,6 +15,7 @@ For one claimed job:
 """
 import asyncio
 import json
+import os
 import time
 import uuid
 from typing import Any
@@ -197,6 +198,9 @@ async def process(job: ClaimedJob, worker_id: str = "") -> None:
         with structlog.contextvars.bound_contextvars(provider_call_id=str(call_id)):
             outcome = await provider_client.score(
                 str(job.media_id), _scores_only(job.frames), callback_url=settings.callback_url)
+            if settings.crash_after_provider and outcome.kind in ("ok", "accepted"):
+                log.warning("crash_after_provider", note="CRASH_AFTER_PROVIDER=1: exiting before the save")
+                os._exit(137)  # the provider scored (and billed) it; we die before recording anything
             await close_call(call_id, outcome)
             log.info("provider_answered", outcome=outcome.kind, http_status=outcome.http_status,
                      duration_ms=round((time.monotonic() - started) * 1000), error=outcome.error)

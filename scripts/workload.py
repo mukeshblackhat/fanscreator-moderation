@@ -212,6 +212,16 @@ async def summarize(engine, provider: httpx.AsyncClient, run: Run) -> dict[str, 
             else:
                 undecided_images[key] = undecided_images.get(key, 0) + 1
 
+    mismatches: dict[str, int] = {}
+    for item in accepted:
+        r = db.get(item.id)
+        final = r["status"] if r else "missing"
+        if final == "held" and r["held_reason_kind"] != "score":
+            final = f"held:{r['held_reason_kind']}"  # still waiting on the provider, not a policy hold
+        if final != item.expected:
+            key = f"expected {item.expected} -> {final}"
+            mismatches[key] = mismatches.get(key, 0) + 1
+
     refused = [i for i in run.items if i.refused_expected]
     total_calls = sum(stats.get(i.id, 0) for i in accepted)
     per_phase_age: dict[str, float | None] = {}
@@ -241,6 +251,8 @@ async def summarize(engine, provider: httpx.AsyncClient, run: Run) -> dict[str, 
         },
         "images_without_decision_by_phase": undecided_images,
         "final_status_counts": final_counts,
+        "final_vs_expected_mismatches": sum(mismatches.values()),
+        "mismatch_breakdown": mismatches,
         "expected_status_counts": _count(i.expected for i in accepted),
         "samples": run.samples,
     }

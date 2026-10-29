@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Worker concurrency per lane, per worker process
     image_concurrency: int = 4
     video_concurrency: int = 2
-    rescreen_concurrency: int = 1
+    rescreen_concurrency: int = 2
 
     # Retry budgets (counted per job from the provider_calls ledger)
     max_failure_attempts: int = 3      # timeouts and 5xx
@@ -37,12 +37,16 @@ class Settings(BaseSettings):
     breaker_open_seconds: float = 10.0
 
     # Recovery
-    rescreen_interval_seconds: float = 5.0
-    rescreen_batch_size: int = 20       # per tick, so recovery does not cause a 429 storm
+    rescreen_interval_seconds: float = 2.0
+    rescreen_batch_size: int = 50       # per tick (about 25/s), so recovery does not cause a 429 storm
     rescreen_probe_window_seconds: float = 30.0
     callback_timeout_seconds: float = 120.0  # resubmit an async video if no callback by then
     cors_origins: str = "http://localhost:5173"
     log_level: str = "INFO"
+
+    # Crash test only: the worker exits hard right after the provider answers,
+    # before anything is recorded. Never set in normal runs.
+    crash_after_provider: bool = False
 
 
 @lru_cache
