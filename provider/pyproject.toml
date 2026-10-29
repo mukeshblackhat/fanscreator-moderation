@@ -1,0 +1,21 @@
+[project]
+name = "fake-provider"
+version = "0.1.0"
+description = "Fake moderation provider for the FansCreator moderation test task"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]

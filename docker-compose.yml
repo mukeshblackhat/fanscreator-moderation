@@ -1,0 +1,81 @@
+name: fanscreator-moderation
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql+asyncpg://moderation:moderation@db:5432/moderation
+  REDIS_URL: redis://redis:6379/0
+  PROVIDER_URL: http://provider:8001
+  CALLBACK_URL: http://api:8000/provider/callback
+  PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-change-me-in-real-life}
+  SCREENING_MODE: ${SCREENING_MODE:-fixed}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: moderation
+      POSTGRES_PASSWORD: moderation
+      POSTGRES_DB: moderation
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moderation -d moderation"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  provider:
+    build: ./provider
+    environment:
+      PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-change-me-in-real-life}
+    ports: ["8001:8001"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ./api
+    environment: *api-env
+    # Migrations and the idempotent seed run before the server starts.
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      provider: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  worker:
+    build: ./api
+    environment: *api-env
+    command: python -m app.screening.worker
+    deploy:
+      replicas: 2
+    depends_on:
+      api: { condition: service_healthy }
+
+  web:
+    build: ./web
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports: ["5173:5173"]
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
