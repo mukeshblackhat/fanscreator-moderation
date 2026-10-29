@@ -9,6 +9,7 @@
 | `05-crash-test.json` | A worker killed with `os._exit(137)` right after the provider scored a video, before the save. |
 | `trace-outage-recovery.txt` | One media item's full log story through an outage and recovery, from a single grep. |
 | `report.md` | The before and after table below, produced by `scripts/report.py`. |
+| `real-model-check.md` | Real uploads (optional `real` profile): public images and videos from Wikimedia Commons through the local model, including a 58 s video where only the last 3 frames are explicit and get it blocked. |
 
 ## Before and after (workload: 30 s healthy, 40 s provider timeout with a 200 video burst, 60 s recovery)
 
