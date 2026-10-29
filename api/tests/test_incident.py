@@ -90,3 +90,15 @@ async def test_duplicate_callback_is_a_no_op(api, provider, db, workers):
     assert final == "published"
     assert scores_rows == 1, f"expected exactly one stored score for the video, found {scores_rows}"
     assert calls == 1, f"provider was called {calls} times"
+
+
+async def test_clean_prompt_is_generated_and_then_screened_like_any_upload(client):
+    from app import generator
+
+    before = generator.total_calls()
+    r = await client.post("/media", headers=ADMIN_V, json={
+        "type": "image", "source": "generated", "prompt": "a cat surfing at sunset",
+        "frames": [{"scores": {"minor": 0.9}}],  # a clean prompt can still produce a bad image
+    })
+    assert r.status_code == 202 and r.json()["status"] == "pending"
+    assert generator.total_calls() == before + 1

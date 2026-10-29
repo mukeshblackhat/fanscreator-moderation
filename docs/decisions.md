@@ -88,3 +88,6 @@ Two workers claiming at the same instant can both see a workspace at 3 running j
 
 ## 24. Publishing also needs stored scores for every frame (migration 0002)
 After this migration, `published` requires a `scores` row with exactly `frame_count` frames, as well as a complete decision. That is the check that would have caught v0's lying decision rows. A side effect: v0 can no longer publish at all on the migrated schema, which is the point.
+
+## 25. Prompt gate: rules now, classifier later
+Normalise (NFKC, lowercase, zero-width removal, joined split letters, digit and symbol substitutions, long repeats), then short synthetic term lists per category and age patterns under 18 in digits or words. Known limits: no translation, paraphrase gets through, and some innocent text will be over-blocked. Production would add a safety classifier with our own category definitions, check negative prompts, reference images and LoRAs, and rate limit accounts that keep probing. The output of a clean prompt is screened like any upload either way.
