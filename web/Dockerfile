@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:22-slim
 RUN corepack enable
 WORKDIR /srv
 COPY package.json pnpm-lock.yaml ./
