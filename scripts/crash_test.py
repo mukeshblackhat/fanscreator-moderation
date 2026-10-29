@@ -57,8 +57,8 @@ async def run(api: str, provider_url: str, database_url: str, lease: int, log_di
     async with httpx.AsyncClient(base_url=api, timeout=10) as client, \
             httpx.AsyncClient(base_url=provider_url, timeout=10) as provider:
         await provider.post("/_reset")
-        frames = [{"scores": {}} for _ in range(20)]
-        frames[19] = {"scores": {"explicit": 0.95}}
+        frames: list[dict] = [{} for _ in range(20)]  # the task's flat frame format
+        frames[19] = {"explicit": 0.95}
         r = await client.post("/media", headers=WHO, json={"type": "video", "frames": frames})
         media_id = r.json()["id"]
         result["media_id"] = media_id

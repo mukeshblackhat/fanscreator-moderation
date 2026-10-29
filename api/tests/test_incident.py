@@ -52,8 +52,8 @@ async def test_refused_prompt_never_reaches_generator_or_provider(client, provid
 
     before = generator.total_calls()
     r = await client.post("/media", headers=ADMIN_V, json={
-        "type": "image", "source": "generated",
-        "prompt": "a 16 year old at the beach", "frames": [{"scores": {}}],
+        "type": "image", "source": "generation",
+        "prompt": "a 16 year old at the beach", "frames": [{}],
     })
     assert r.status_code == 422, f"prompt was accepted with {r.status_code}"
     assert any(reason.startswith("prompt:") for reason in r.json()["reasons"])
@@ -97,8 +97,8 @@ async def test_clean_prompt_is_generated_and_then_screened_like_any_upload(clien
 
     before = generator.total_calls()
     r = await client.post("/media", headers=ADMIN_V, json={
-        "type": "image", "source": "generated", "prompt": "a cat surfing at sunset",
-        "frames": [{"scores": {"minor": 0.9}}],  # a clean prompt can still produce a bad image
+        "type": "image", "source": "generation", "prompt": "a cat surfing at sunset",
+        "frames": [{"minor": 0.9}],  # a clean prompt can still produce a bad image
     })
     assert r.status_code == 202 and r.json()["status"] == "pending"
     assert generator.total_calls() == before + 1

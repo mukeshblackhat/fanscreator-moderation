@@ -64,7 +64,11 @@ def full_scores(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Echo each frame's scores back, with every label present (missing = 0)."""
     out = []
     for i, frame in enumerate(frames):
-        given = frame.get("scores", {}) or {}
+        # Flat {"explicit": 0.9} (the task's format) or nested {"scores": {...}}.
+        if isinstance(frame.get("scores"), dict):
+            given = frame["scores"]
+        else:
+            given = {k: v for k, v in frame.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
         out.append({"index": i, "scores": {label: float(given.get(label, 0.0)) for label in LABELS}})
     return out
 

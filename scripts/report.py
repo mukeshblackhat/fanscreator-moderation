@@ -12,6 +12,11 @@ def lat(run: dict, ws: str, phase: str, p: str) -> str:
     return "n/a" if v is None else f"{v:.2f} s"
 
 
+def first(run: dict, ws: str, phase: str, p: str) -> str:
+    v = run.get("image_time_to_first_outcome_s", {}).get(ws, {}).get(phase, {}).get(p)
+    return "n/a" if v is None else f"{v:.2f} s"
+
+
 def age(run: dict, phase: str) -> str:
     v = run.get("oldest_waiting_job_age_s_max_by_phase", {}).get(phase)
     return "n/a" if v is None else f"{v:.1f} s"
@@ -25,11 +30,17 @@ ROWS = [
     ("Provider calls per upload (target 1.0)", lambda r: r["provider_calls_per_upload"]),
     ("Oldest waiting job, outage", lambda r: age(r, "outage")),
     ("Oldest waiting job, recovery", lambda r: age(r, "recovery")),
-    ("ws_unverified image p50 / p95, healthy",
+    ("ws_unverified image to first outcome (held counts) p50 / p95, healthy",
+     lambda r: f'{first(r, "ws_unverified", "healthy", "p50")} / {first(r, "ws_unverified", "healthy", "p95")}'),
+    ("ws_unverified image to first outcome (held counts) p50 / p95, outage",
+     lambda r: f'{first(r, "ws_unverified", "outage", "p50")} / {first(r, "ws_unverified", "outage", "p95")}'),
+    ("ws_unverified image to first outcome (held counts) p50 / p95, recovery",
+     lambda r: f'{first(r, "ws_unverified", "recovery", "p50")} / {first(r, "ws_unverified", "recovery", "p95")}'),
+    ("ws_unverified image to final decision p50 / p95, healthy",
      lambda r: f'{lat(r, "ws_unverified", "healthy", "p50")} / {lat(r, "ws_unverified", "healthy", "p95")}'),
-    ("ws_unverified image p50 / p95, outage",
+    ("ws_unverified image to final decision p50 / p95, outage",
      lambda r: f'{lat(r, "ws_unverified", "outage", "p50")} / {lat(r, "ws_unverified", "outage", "p95")}'),
-    ("ws_unverified image p50 / p95, recovery",
+    ("ws_unverified image to final decision p50 / p95, recovery",
      lambda r: f'{lat(r, "ws_unverified", "recovery", "p50")} / {lat(r, "ws_unverified", "recovery", "p95")}'),
     ("Items whose final status differs from the full-frame policy",
      lambda r: f'{r.get("final_vs_expected_mismatches", "n/a")}'

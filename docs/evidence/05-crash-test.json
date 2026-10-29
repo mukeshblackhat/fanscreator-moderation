@@ -1,6 +1,6 @@
 {
   "lease_seconds": 5,
-  "media_id": "0f03e23a-99b9-42d7-8441-57e1c9d7b7b0",
+  "media_id": "bd43f3a0-06fa-40a2-bde0-029d8c2f44e0",
   "worker_a_exit_code": 137,
   "status_after_crash": "pending",
   "ledger_after_crash": [
@@ -11,7 +11,7 @@
     }
   ],
   "provider_calls_after_crash": 1,
-  "recovered_after_s": 6.0,
+  "recovered_after_s": 5.8,
   "final_status": "blocked",
   "statuses_seen": [
     "pending",

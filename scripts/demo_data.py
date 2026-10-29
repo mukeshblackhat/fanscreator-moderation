@@ -23,18 +23,18 @@ UNVERIFIED_MEMBER = {"X-User-Id": "member_u", "X-Workspace-Id": "ws_unverified"}
 
 
 def image(**scores: float) -> dict:
-    return {"type": "image", "frames": [{"scores": scores}]}
+    return {"type": "image", "frames": [dict(scores)]}
 
 
 def video(n: int, late: dict[str, float] | None = None, at: int | None = None) -> dict:
-    frames = [{"scores": {"explicit": round(random.uniform(0, 0.2), 2)}} for _ in range(n)]
+    frames = [{"explicit": round(random.uniform(0, 0.2), 2)} for _ in range(n)]
     if late:
-        frames[at if at is not None else n - 1] = {"scores": late}
+        frames[at if at is not None else n - 1] = dict(late)
     return {"type": "video", "frames": frames}
 
 
 def generated(prompt: str, **scores: float) -> dict:
-    return {"type": "image", "source": "generated", "prompt": prompt, "frames": [{"scores": scores}]}
+    return {"type": "image", "source": "generation", "prompt": prompt, "frames": [dict(scores)]}
 
 
 ITEMS: list[tuple[str, dict, dict]] = [

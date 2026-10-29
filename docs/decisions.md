@@ -118,3 +118,6 @@ CPU scoring can take longer than the 2 s sync timeout, so the real provider alwa
 
 ## 34. Frames are served by role and status, never for blocked media
 `GET /media/{id}/frames/{n}`: published is visible to members of that workspace, and score holds to its admins (who have to see an item to review it). Pending, blocked and unscreened media returns 404 to everyone. Responses are `private, no-store`. Originals are deleted after frame extraction, so only the normalised frames that were scored are kept.
+
+## 35. The task's media format, and why both forms are accepted
+The task page shows frames as flat score objects (`{"explicit": 0.95, "self_harm": 0.1}`) and generated media as `"source": "generation"`. The build started from a transcription that used `{"scores": {...}}` and `"generated"`. The API now treats the task's format as primary and still accepts the nested form and `"generated"`, normalising both at the edge. Internally frames are stored as `{"scores": {...}}` (real uploads add an `image` path to the same object), so the pipeline did not change. A flat frame can never be read as all zeros: scores are any numeric keys, each must be 0 to 1, and anything else is a 422.

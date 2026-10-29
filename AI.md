@@ -21,9 +21,11 @@ Nothing was marked done without running it. The outputs are committed in [`docs/
   - The workload ran against both versions.
   - The crash test was run against the live stack.
 - **Compose from clean.** `docker compose build --no-cache` and `docker compose up` on macOS (Docker 29.6, Compose 5.3). Every service was healthy, and a smoke run covered publish, block over the async callback, the refused prompt (422), isolation (404/403/401), and an outage hold with 409 on approve and automatic recovery. Unchecked published stayed 0.
-- **Ledger against the provider.** The ledger was compared with the provider's own call counts, and successful scores per media were counted in the database (722 of 722 exactly once).
+- **Ledger against the provider.** The ledger was compared with the provider's own call counts, and successful scores per media were counted in the database (723 of 723 exactly once).
 
 ## Mistakes that were caught
+
+- **The media format was transcribed wrong at the start.** The plan I built from used nested frames (`{"scores": {...}}`) and `"source": "generated"`. Checking against the task page late in the work showed the real format is flat frames and `"generation"`. Against the running stack, the task's own example got a 422 and a flat `{"minor": 0.95}` image was published, because its scores were read as zeros. That would have failed most of the graders' checks. Fixed by accepting the task's format (keeping the old one), adding tests built from the task's exact example, switching every test, script and the UI to the official format, and re-running all the evidence.
 
 The running log, with what was wrong and what changed, is [`docs/ai-log.md`](docs/ai-log.md). The ones that mattered most:
 

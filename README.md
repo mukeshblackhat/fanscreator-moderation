@@ -9,7 +9,7 @@ I started by rebuilding last Tuesday's incident on purpose (a broken v0 with all
 | Media published unchecked | 30 | **0** |
 | Refused prompts that reached the generator | 9 of 9 | **0 of 9** |
 | Items whose final status is wrong | 30 | **0** |
-| Items scored successfully more than once | some (2 calls for 1 upload in tests) | **0 of 722** |
+| Items scored successfully more than once | some (2 calls for 1 upload in tests) | **0 of 723** |
 
 ## 1. How to run
 
@@ -37,9 +37,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api python /
 
 The API and provider reload on save, the workers restart on any Python change, and the review page hot-reloads. `scripts/demo_data.py` fills both workspaces through the real pipeline (add `--outage` to also see held items recover by themselves). The review page has three tabs: the review queue, all media with readable reasons, and **Try it**, which has one-click test uploads and switches for the fake provider's mode (healthy, outage, 500s, slow, 429, bad answers).
 
-### Real uploads (optional)
+### Real uploads (optional extra, beyond the task's scope)
 
-The graded service uses the fake provider. To screen real files as well, turn on the `real` profile (`COMPOSE_PROFILES=real` in `.env`) and upload from the **Try it** tab.
+The task says no real images and no real classifier, and the graded service follows that: by default everything goes to the fake provider. Real uploads are an extra I added to see the pipeline work on real pixels. They are off unless you turn them on. To screen real files as well, turn on the `real` profile (`COMPOSE_PROFILES=real` in `.env`) and upload from the **Try it** tab.
 
 - **Primary scorer:** a local open-source image model (`Falconsai/nsfw_image_detection`, a ViT for normal vs nsfw). It runs on CPU in the `real-provider` container, so files never leave the machine.
 - **Optional second opinion:** OpenAI `omni-moderation-latest`, if `OPENAI_API_KEY` is set. It adds self-harm, and sexual violence as a heuristic (sexual and violent at once). For explicit, it takes the higher of the two scores.
@@ -57,8 +57,8 @@ The API tests need a throwaway Postgres database and Redis. The harness migrates
 cd api
 uv sync
 TEST_DATABASE_URL=postgresql+asyncpg://moderation:moderation@localhost:5432/moderation_test \
-  SCREENING_MODE=fixed uv run pytest -v           # 134 tests
-cd ../provider && uv sync && uv run pytest        # 5 tests
+  SCREENING_MODE=fixed uv run pytest -v           # 147 tests
+cd ../provider && uv sync && uv run pytest        # 6 tests
 cd ../provider_real && uv sync && uv run pytest   # 7 tests (stub model, no downloads)
 cd ../web && pnpm install && pnpm test            # 15 tests
 ```
@@ -85,12 +85,14 @@ uv run python ../scripts/crash_test.py --out ../docs/evidence/05-crash-test.json
 
 Identity comes from `X-User-Id` and `X-Workspace-Id` (missing either is `401`).
 
-Media input is tolerant. Extra fields are accepted, and `type` or `kind` both work. An image must have exactly 1 frame. `source` defaults to `upload`, and `generated` needs a `prompt`. A missing label scores 0.
+Media input follows the task's format: each frame is a flat object of label scores, and generated media has `"source": "generation"` plus its `prompt`. A label left out scores 0. `source` defaults to `upload`, an image must have exactly 1 frame, and a score outside 0 to 1 is a `422`. For tolerance, `type` or `kind` both work, and the nested form `{"scores": {...}}` and `"generated"` are also accepted.
 
 ```json
-{"type": "video", "source": "generated", "prompt": "a cat surfing at sunset",
- "frames": [{"scores": {"explicit": 0.1}}, {"scores": {"explicit": 0.95}}]}
+{"type": "video", "source": "generation", "prompt": "two adults on a beach at sunset",
+ "frames": [{"explicit": 0.02}, {"explicit": 0.95, "self_harm": 0.1}]}
 ```
+
+That exact example is a test (`tests/test_task_format.py`): blocked in `ws_unverified` (explicit on frame 1), published in `ws_verified`.
 
 ## 2. The failure
 
@@ -134,17 +136,19 @@ Same seeded workload, both runs. v0 ran on the schema it was written for (migrat
 | &nbsp;&nbsp;published without a complete decision | 0 | 0 |
 | &nbsp;&nbsp;published although the full-frame policy says no | 30 | 0 |
 | Refused prompts accepted | 9 of 9 | 0 of 9 |
-| Provider calls per upload (target 1.0) | 1.037 | 1.021 |
-| Oldest waiting job, outage | 38.9 s | 21.8 s |
-| Oldest waiting job, recovery | 45.1 s | 24.5 s |
-| ws_unverified image p50 / p95, healthy | 0.10 s / 0.16 s | 0.08 s / 0.12 s |
-| ws_unverified image p50 / p95, outage | 28.42 s / 43.62 s | 40.80 s / 50.77 s |
-| ws_unverified image p50 / p95, recovery | 0.10 s / 8.71 s | 0.14 s / 11.02 s |
+| Provider calls per upload (target 1.0) | 1.034 | 1.021 |
+| Oldest waiting job, outage | 39.7 s | 22.0 s |
+| Oldest waiting job, recovery | 44.1 s | 24.3 s |
+| ws_unverified image to first outcome (held counts) p50 / p95, healthy | 0.09 s / 0.15 s | 0.08 s / 0.12 s |
+| ws_unverified image to first outcome (held counts) p50 / p95, outage | 27.63 s / 43.14 s | 20.54 s / 21.99 s |
+| ws_unverified image to first outcome (held counts) p50 / p95, recovery | 0.08 s / 7.55 s | 0.13 s / 11.05 s |
+| ws_unverified image to final decision p50 / p95, outage | 27.63 s / 43.14 s | 42.06 s / 50.64 s |
 | Final status differs from the full-frame policy | 30 | 0 |
 
 How to read it:
-- **Calls per upload 1.021.** All 722 screened items were scored successfully exactly once. The 15 extra calls are timeouts sent at the start of the outage, before the breaker opened.
-- **Image latency during the outage went up.** v0 was fast because it published images it never screened. The fix waits for the provider, so the number includes the outage itself.
+- **The burst does not stop the other workspace's images, during the outage or after it.** During the outage every `ws_unverified` image reached an outcome (held) at 20.5 s p50 and 22.0 s p95. That narrow spread is the 20 s hold rule doing its job, not images waiting behind the 200 videos (v0 spread from 27.6 s to 43.1 s). In the healthy and recovery phases images are decided in about 0.1 s at p50.
+- **Calls per upload 1.021.** All 723 screened items were scored successfully exactly once. The 15 extra calls are timeouts sent at the start of the outage, before the breaker opened.
+- **Time to final decision during the outage went up (42 s).** v0 was fast because it published images it never screened. The fix holds them and re-screens after recovery, so that number includes the outage itself.
 - **Recovery p95 of 11 s.** Images uploaded right after the provider comes back wait out the breaker's 10 s open period.
 - **"Published without a complete decision" reads 0 for v0.** That's because v0's decision rows claimed every frame was covered. The row below it re-runs the policy over every frame and shows the real damage.
 
@@ -172,7 +176,7 @@ Every log line is JSON with `workspace_id`, `media_id`, `job_id`, `attempt`, `la
 `scripts/crash_test.py` starts a worker with `CRASH_AFTER_PROVIDER=1`. That worker calls `os._exit(137)` right after the provider scores a 20-frame video, before anything is saved. The video has explicit content only on its last frame and sits in the unverified workspace. Result ([`05-crash-test.json`](docs/evidence/05-crash-test.json)):
 
 - After the crash, the media is `pending` (invisible) and the ledger shows the call `in_flight`.
-- A second worker reclaims the job when the 5 s lease runs out (6.0 s after the crash). It marks the first call `abandoned`, calls again, and decides `blocked`.
+- A second worker reclaims the job when the 5 s lease runs out (5.8 s after the crash). It marks the first call `abandoned`, calls again, and decides `blocked`.
 - It was never `published`. It cost 2 provider calls, and the scores were stored once.
 
 **What it proves:** lease expiry and reclaim work. The fencing token works (also tested directly: a stale worker's write is a no-op). The ledger stays honest, and a dead worker can't publish anything unchecked.

@@ -207,12 +207,13 @@ async def wait_final(api: httpx.AsyncClient, who: dict, media_id: str, timeout: 
     return status, seen
 
 
+# Media in the task's format: each frame is a flat object of label scores.
 def video(n: int, overrides: dict[int, dict[str, float]] | None = None) -> dict:
-    frames = [{"scores": {}} for _ in range(n)]
+    frames: list[dict[str, float]] = [{} for _ in range(n)]
     for i, scores in (overrides or {}).items():
-        frames[i] = {"scores": scores}
+        frames[i] = dict(scores)
     return {"type": "video", "frames": frames}
 
 
 def image(scores: dict[str, float] | None = None) -> dict:
-    return {"type": "image", "frames": [{"scores": scores or {}}]}
+    return {"type": "image", "frames": [dict(scores or {})]}

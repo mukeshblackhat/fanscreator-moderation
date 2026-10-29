@@ -51,3 +51,10 @@ def test_signature_is_hmac_sha256_hex():
     from provider.main import sign
 
     assert sign(b"{}") == hmac.new(SECRET, b"{}", hashlib.sha256).hexdigest()
+
+
+async def test_accepts_the_flat_frame_format_from_the_task(client):
+    r = await client.post("/score", json={"media_id": "m5", "frames": [{"explicit": 0.02}, {"explicit": 0.95, "self_harm": 0.1}]})
+    frames = r.json()["frames"]
+    assert frames[1]["scores"]["explicit"] == 0.95 and frames[1]["scores"]["self_harm"] == 0.1
+    assert frames[0]["scores"]["minor"] == 0.0

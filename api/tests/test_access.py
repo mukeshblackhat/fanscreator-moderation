@@ -25,7 +25,7 @@ async def test_media_input_shape(client):
     assert (await client.post("/media", headers=MEMBER_V, json={"kind": "image", "frames": [{}]})).status_code == 202
     two_frame_image = {"type": "image", "frames": [{}, {}]}
     assert (await client.post("/media", headers=MEMBER_V, json=two_frame_image)).status_code == 422
-    no_prompt = {"type": "image", "source": "generated", "frames": [{}]}
+    no_prompt = {"type": "image", "source": "generation", "frames": [{}]}
     assert (await client.post("/media", headers=MEMBER_V, json=no_prompt)).status_code == 422
 
 

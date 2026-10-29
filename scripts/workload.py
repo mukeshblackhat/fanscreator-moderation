@@ -15,6 +15,8 @@ Traffic:
 Every item's true outcome is computed with the real policy on ALL its frames,
 so the report can count media that went live when they should not have.
 
+Media uses the task's format: flat frames ({"explicit": 0.95}) and "source": "generation".
+
 Run against a running stack (docker compose or local), from the api folder:
   uv run python ../scripts/workload.py --out ../docs/evidence/02-broken-workload.json
 """
@@ -79,20 +81,20 @@ def image_scores(rng: random.Random) -> dict[str, float]:
 
 def video_frames(rng: random.Random) -> list[dict[str, Any]]:
     n = rng.choice([10, 31, 60])
-    frames: list[dict[str, Any]] = [{"scores": {"explicit": round(rng.uniform(0, 0.2), 2)}} for _ in range(n)]
+    frames: list[dict[str, Any]] = [{"explicit": round(rng.uniform(0, 0.2), 2)} for _ in range(n)]
     late = rng.randrange(max(n - n // 5, 9), n) if n > 9 else n - 1  # always after frame 8
     roll = rng.random()
     if roll < 0.15:
-        frames[late] = {"scores": {"explicit": 0.95}}
+        frames[late] = {"explicit": 0.95}
     elif roll < 0.25:
-        frames[late] = {"scores": {rng.choice(["minor", "sexual_violence", "real_person"]): 0.9}}
+        frames[late] = {rng.choice(["minor", "sexual_violence", "real_person"]): 0.9}
     elif roll < 0.30:
-        frames[late] = {"scores": {"self_harm": 0.6}}
+        frames[late] = {"self_harm": 0.6}
     return frames
 
 
 def expected(frames: list[dict[str, Any]], verified: bool) -> str:
-    return decide([f.get("scores", {}) for f in frames], verified).status
+    return decide(frames, verified).status
 
 
 async def post(client: httpx.AsyncClient, run: Run, who: dict, body: dict, *, refused: bool = False) -> None:
@@ -112,17 +114,17 @@ async def post(client: httpx.AsyncClient, run: Run, who: dict, body: dict, *, re
 
 async def unverified_images(client: httpx.AsyncClient, run: Run, rng: random.Random, stop: asyncio.Event) -> None:
     while not stop.is_set():
-        asyncio.create_task(post(client, run, UNVERIFIED, {"type": "image", "frames": [{"scores": image_scores(rng)}]}))
+        asyncio.create_task(post(client, run, UNVERIFIED, {"type": "image", "frames": [image_scores(rng)]}))
         await asyncio.sleep(0.25)
 
 
 async def generated(client: httpx.AsyncClient, run: Run, rng: random.Random) -> None:
     for prompt in REFUSED_PROMPTS:
-        body = {"type": "image", "source": "generated", "prompt": prompt, "frames": [{"scores": {}}]}
+        body = {"type": "image", "source": "generation", "prompt": prompt, "frames": [{}]}
         await post(client, run, rng.choice([VERIFIED, UNVERIFIED]), body, refused=True)
     prompt = rng.choice(CLEAN_PROMPTS)
-    await post(client, run, VERIFIED, {"type": "image", "source": "generated", "prompt": prompt,
-                                       "frames": [{"scores": {}}]})
+    await post(client, run, VERIFIED, {"type": "image", "source": "generation", "prompt": prompt,
+                                       "frames": [{}]})
 
 
 async def video_burst(client: httpx.AsyncClient, run: Run, rng: random.Random, count: int) -> None:
@@ -173,6 +175,8 @@ async def summarize(engine, provider: httpx.AsyncClient, run: Run) -> dict[str, 
                    EXTRACT(EPOCH FROM m.created_at) AS created,
                    d.frames_scored, d.frame_count AS d_frame_count, d.status AS d_status,
                    (SELECT EXTRACT(EPOCH FROM min(created_at)) FROM decisions x WHERE x.media_id = m.id) AS first_decision,
+                   (SELECT EXTRACT(EPOCH FROM min(updated_at)) FROM jobs j
+                      WHERE j.media_id = m.id AND j.state IN ('done', 'dead')) AS first_outcome,
                    (SELECT jsonb_array_length(s.frames) FROM scores s WHERE s.media_id = m.id) AS scored_frames,
                    (SELECT count(*) FROM provider_calls c WHERE c.media_id = m.id) AS ledger_calls
             FROM media m LEFT JOIN decisions d ON d.id = m.decision_id
@@ -189,6 +193,7 @@ async def summarize(engine, provider: httpx.AsyncClient, run: Run) -> dict[str, 
     unchecked_ids = set()
     final_counts: dict[str, int] = {}
     latencies: dict[str, dict[str, list[float]]] = {}
+    outcomes: dict[str, dict[str, list[float]]] = {}
     undecided_images: dict[str, int] = {}
     for item in accepted:
         r = db.get(item.id)
@@ -206,6 +211,9 @@ async def summarize(engine, provider: httpx.AsyncClient, run: Run) -> dict[str, 
                 without_full_scores += 1
         if item.type == "image" and r:
             key = f"{item.workspace}/{item.phase}"
+            if r["first_outcome"] is not None:  # decided OR held: the item is no longer stuck in the queue
+                outcomes.setdefault(item.workspace, {}).setdefault(item.phase, []).append(
+                    float(r["first_outcome"]) - float(r["created"]))
             if r["first_decision"] is not None:
                 latencies.setdefault(item.workspace, {}).setdefault(item.phase, []).append(
                     float(r["first_decision"]) - float(r["created"]))
@@ -248,6 +256,10 @@ async def summarize(engine, provider: httpx.AsyncClient, run: Run) -> dict[str, 
         "image_latency_s": {
             ws: {phase: {"n": len(v), "p50": pct(v, 50), "p95": pct(v, 95)} for phase, v in phases.items()}
             for ws, phases in latencies.items()
+        },
+        "image_time_to_first_outcome_s": {
+            ws: {phase: {"n": len(v), "p50": pct(v, 50), "p95": pct(v, 95)} for phase, v in phases.items()}
+            for ws, phases in outcomes.items()
         },
         "images_without_decision_by_phase": undecided_images,
         "final_status_counts": final_counts,

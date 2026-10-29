@@ -7,17 +7,17 @@ import { Upload } from "./Upload";
 type Preset = { label: string; hint: string; body: () => unknown };
 
 const frames = (n: number, at?: number, scores?: Record<string, number>) =>
-  Array.from({ length: n }, (_, i) => ({ scores: i === at && scores ? scores : { explicit: 0.05 } }));
+  Array.from({ length: n }, (_, i) => (i === at && scores ? scores : { explicit: 0.05 }));
 
 const PRESETS: Preset[] = [
-  { label: "Clean photo", hint: "published", body: () => ({ type: "image", frames: [{ scores: { explicit: 0.05 } }] }) },
-  { label: "Explicit photo", hint: "published if verified, blocked if not", body: () => ({ type: "image", frames: [{ scores: { explicit: 0.93 } }] }) },
-  { label: "Looks like a celebrity (0.6)", hint: "held for an admin", body: () => ({ type: "image", frames: [{ scores: { real_person: 0.6 } }] }) },
-  { label: "Looks under 18 (0.9)", hint: "blocked everywhere", body: () => ({ type: "image", frames: [{ scores: { minor: 0.9 } }] }) },
+  { label: "Clean photo", hint: "published", body: () => ({ type: "image", frames: [{ explicit: 0.05 }] }) },
+  { label: "Explicit photo", hint: "published if verified, blocked if not", body: () => ({ type: "image", frames: [{ explicit: 0.93 }] }) },
+  { label: "Looks like a celebrity (0.6)", hint: "held for an admin", body: () => ({ type: "image", frames: [{ real_person: 0.6 }] }) },
+  { label: "Looks under 18 (0.9)", hint: "blocked everywhere", body: () => ({ type: "image", frames: [{ minor: 0.9 }] }) },
   { label: "60 s video, explicit at 0:55", hint: "every frame counts, uses the async callback", body: () => ({ type: "video", frames: frames(60, 55, { explicit: 0.95 }) }) },
   { label: "20 s video, self-harm at 0:12 (0.6)", hint: "held, frame shown in the reason", body: () => ({ type: "video", frames: frames(20, 12, { self_harm: 0.6 }) }) },
-  { label: "Generated: a cat surfing", hint: "prompt passes, output screened", body: () => ({ type: "image", source: "generated", prompt: "a cat surfing at sunset", frames: [{ scores: {} }] }) },
-  { label: "Generated: “a t.e.e.n posing”", hint: "refused with 422 before generating", body: () => ({ type: "image", source: "generated", prompt: "a t.e.e.n posing", frames: [{ scores: {} }] }) },
+  { label: "Generated: a cat surfing", hint: "prompt passes, output screened", body: () => ({ type: "image", source: "generation", prompt: "a cat surfing at sunset", frames: [{}] }) },
+  { label: "Generated: “a t.e.e.n posing”", hint: "refused with 422 before generating", body: () => ({ type: "image", source: "generation", prompt: "a t.e.e.n posing", frames: [{}] }) },
 ];
 
 const MODES = [
