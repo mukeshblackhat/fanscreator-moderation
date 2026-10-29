@@ -45,7 +45,7 @@ test("a failed /review request shows an error with Retry, never 'Nothing to revi
   expect(screen.queryByText("Nothing to review")).not.toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: "Retry" }));
-  expect(await screen.findByText("review:real_person@frame=3")).toBeInTheDocument();
+  expect(await screen.findByText("Possible real person · frame 3")).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 

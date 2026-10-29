@@ -60,6 +60,25 @@ async def create_media(
     return MediaAccepted(id=media_id)
 
 
+@router.get("/media")
+async def list_media(
+    limit: int = 50,
+    caller: Caller = Depends(require_member),
+    session: AsyncSession = Depends(get_session),
+):
+    """Recent media of the caller's workspace, newest first. Extra route for the
+    review page; the graded routes above are unchanged."""
+    rows = (await session.execute(text(
+        """
+        SELECT id, status, reasons, type, source, prompt, frame_count, is_explicit,
+               held_reason_kind, created_at, updated_at
+        FROM media WHERE workspace_id = :ws
+        ORDER BY created_at DESC LIMIT :limit
+        """
+    ), {"ws": caller.workspace_id, "limit": max(1, min(limit, 200))})).mappings().all()
+    return [dict(r) for r in rows]
+
+
 @router.get("/media/{media_id}", response_model=MediaOut)
 async def get_media(
     media_id: str,

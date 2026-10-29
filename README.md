@@ -28,6 +28,15 @@ If you already run Postgres or Redis locally, set `DB_PORT` and `REDIS_PORT` in 
 
 `docker compose up` starts `db`, `redis`, `provider`, `api` (runs the migrations and an idempotent seed first), `worker` (2 replicas) and `web`. The seed creates `ws_verified` (users `admin_v`, `member_v`) and `ws_unverified` (users `admin_u`, `member_u`). `SCREENING_MODE=broken` in `.env` switches the workers to the deliberately unsafe v0.
 
+### Develop with live reload
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api python /srv/scripts/demo_data.py --api http://localhost:8000 --provider http://provider:8001
+```
+
+The API and provider reload on save, the workers restart on any Python change, and the review page hot-reloads. `scripts/demo_data.py` fills both workspaces through the real pipeline (add `--outage` to also see held items recover by themselves). The review page has three tabs: the review queue, all media with readable reasons, and **Try it**, which has one-click test uploads and switches for the fake provider's mode (healthy, outage, 500s, slow, 429, bad answers).
+
 ### Tests
 
 The API tests need a throwaway Postgres database and Redis. The harness migrates the database, then starts the real fake provider and the real API as subprocesses, so timeouts, `202`s and signed callbacks behave like they do in compose.

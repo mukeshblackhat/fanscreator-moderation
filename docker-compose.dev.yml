@@ -1,0 +1,42 @@
+# Live reload on top of docker-compose.yml. Edit code on the host and it reloads:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# api and provider: uvicorn --reload; workers: restarted by watchfiles on any .py change;
+# web: Vite dev server with hot module reload. Polling is on because file events from
+# macOS bind mounts do not always reach the containers.
+x-poll: &poll
+  WATCHFILES_FORCE_POLLING: "true"
+
+services:
+  api:
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app"
+    environment:
+      <<: *poll
+    volumes:
+      - ./api/app:/srv/app
+      - ./api/migrations:/srv/migrations
+      - ./scripts:/srv/scripts
+
+  worker:
+    command: watchfiles --filter python "python -m app.screening.worker" app
+    environment:
+      <<: *poll
+    volumes:
+      - ./api/app:/srv/app
+
+  provider:
+    command: uvicorn provider.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir provider
+    environment:
+      <<: *poll
+    volumes:
+      - ./provider/provider:/srv/provider
+
+  web:
+    command: pnpm exec vite --host 0.0.0.0 --port 5173
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_PROVIDER_URL: http://localhost:8001
+      VITE_POLLING: "1"
+    volumes:
+      - ./web/src:/srv/src
+      - ./web/index.html:/srv/index.html
+      - ./web/vite.config.ts:/srv/vite.config.ts

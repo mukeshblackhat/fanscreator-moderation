@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiFetch, type Identity } from "./api";
+import { ago, HELD_KIND, Reasons } from "./labels";
 
 export type ReviewItem = {
   id: string;
@@ -20,84 +21,129 @@ export function ReviewQueue({ who }: { who: Identity }) {
   const query = useQuery({
     queryKey: key,
     queryFn: () => apiFetch<ReviewItem[]>("/review", who),
-    refetchInterval: 5000,
+    refetchInterval: 3000,
+    retry: false, // errors show at once with a Retry button; the queue also refreshes every 3 s
   });
 
   const act = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
       apiFetch(`/review/${id}/${action}`, who, { method: "POST" }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: key });
+      queryClient.invalidateQueries({ queryKey: ["media"] });
+      queryClient.invalidateQueries({ queryKey: ["metrics-summary"] });
+    },
   });
 
-  if (query.isPending) {
-    return (
-      <p role="status" aria-busy="true" style={{ color: "#666" }}>
-        Loading review queue…
-      </p>
-    );
-  }
-
-  if (query.isError) {
-    const status = query.error instanceof ApiError ? query.error.status : undefined;
-    return (
-      <div role="alert" style={{ border: "1px solid #c62828", background: "#fdecea", padding: "0.75rem", borderRadius: 6 }}>
-        <strong>Could not load the review queue</strong>
-        {status !== undefined ? ` (HTTP ${status})` : " (network error)"}. Items may be waiting.{" "}
-        <button onClick={() => query.refetch()} disabled={query.isFetching}>
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  const items = query.data;
-  if (items.length === 0) return <p>Nothing to review</p>;
-
   return (
-    <>
-      {act.isError && (
-        <p role="alert" style={{ color: "#c62828" }}>
-          {act.error instanceof ApiError && act.error.status === 409
-            ? "That item cannot be approved: it was never screened."
-            : `Action failed: ${act.error.message}`}
-        </p>
-      )}
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>
-        <tr style={{ textAlign: "left" }}>
-          <th>ID</th>
-          <th>Created</th>
-          <th>Reasons</th>
-          <th>Held kind</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const blocked = item.held_reason_kind !== null && NOT_APPROVABLE.has(item.held_reason_kind);
-          return (
-            <tr key={item.id} style={{ borderTop: "1px solid #ddd" }}>
-              <td style={{ fontFamily: "monospace" }}>{item.id.slice(0, 8)}</td>
-              <td>{new Date(item.created_at).toLocaleTimeString()}</td>
-              <td>{item.reasons.join(", ")}</td>
-              <td>{item.held_reason_kind}</td>
-              <td>
-                <button
-                  disabled={blocked || act.isPending}
-                  title={blocked ? "Not screened yet: re-screened automatically, cannot be approved" : undefined}
-                  onClick={() => act.mutate({ id: item.id, action: "approve" })}
-                >
-                  Approve
-                </button>{" "}
-                <button disabled={act.isPending} onClick={() => act.mutate({ id: item.id, action: "reject" })}>
-                  Reject
-                </button>
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-    </>
+    <section className="card">
+      <div className="card-head">
+        <div>
+          <h2>Review queue</h2>
+          <p>Held media in {who.workspaceId}. Only workspace admins can approve or reject.</p>
+        </div>
+        {query.isFetching && !query.isPending && <span className="sub">refreshing…</span>}
+      </div>
+      {renderBody()}
+    </section>
   );
+
+  function renderBody() {
+    if (query.isPending) {
+      return (
+        <div role="status" aria-busy="true">
+          <span className="sub" style={{ display: "block", padding: ".75rem 1rem 0" }}>Loading review queue…</span>
+          <div className="skeleton" />
+          <div className="skeleton" />
+          <div className="skeleton" style={{ width: "60%" }} />
+        </div>
+      );
+    }
+
+    if (query.isError) {
+      const status = query.error instanceof ApiError ? query.error.status : undefined;
+      if (status === 403) {
+        return (
+          <div className="card-body">
+            <div className="banner info">
+              {who.userId} is a member, not an admin, so the API answers 403 here. Switch to{" "}
+              {who.workspaceId === "ws_verified" ? "admin_v" : "admin_u"} to review this workspace.
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="card-body">
+          <div role="alert" className="banner error">
+            <span>
+              <strong>Could not load the review queue</strong>
+              {status !== undefined ? ` (HTTP ${status})` : " (network error)"}. Items may be waiting.
+            </span>
+            <button onClick={() => query.refetch()} disabled={query.isFetching}>
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const items = query.data;
+    if (items.length === 0) return <p className="empty">Nothing to review</p>;
+
+    return (
+      <>
+        {act.isError && (
+          <div className="card-body" style={{ paddingBottom: 0 }}>
+            <p role="alert" className="banner error" style={{ margin: 0 }}>
+              {act.error instanceof ApiError && act.error.status === 409
+                ? "That item cannot be approved: it was never screened."
+                : `Action failed: ${act.error.message}`}
+            </p>
+          </div>
+        )}
+        <table>
+          <thead>
+            <tr>
+              <th>Media</th>
+              <th>Why it is held</th>
+              <th>Hold type</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const unscreened = item.held_reason_kind !== null && NOT_APPROVABLE.has(item.held_reason_kind);
+              return (
+                <tr key={item.id}>
+                  <td>
+                    <code>{item.id.slice(0, 8)}</code>
+                    <div className="sub">{ago(item.created_at)}</div>
+                  </td>
+                  <td>
+                    <Reasons reasons={item.reasons} />
+                  </td>
+                  <td>
+                    <span className="sub">{item.held_reason_kind ? HELD_KIND[item.held_reason_kind] : ""}</span>
+                  </td>
+                  <td className="actions">
+                    <button
+                      className="primary"
+                      disabled={unscreened || act.isPending}
+                      title={unscreened ? "Not screened yet: re-screened automatically, cannot be approved" : undefined}
+                      onClick={() => act.mutate({ id: item.id, action: "approve" })}
+                    >
+                      Approve
+                    </button>{" "}
+                    <button className="danger" disabled={act.isPending} onClick={() => act.mutate({ id: item.id, action: "reject" })}>
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </>
+    );
+  }
 }

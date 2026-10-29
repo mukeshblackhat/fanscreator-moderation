@@ -74,3 +74,12 @@ async def test_callback_signature(client):
     assert (await client.post("/provider/callback", content=body, headers=bad)).status_code == 401
     good = {**headers, "X-Signature": _sign(body)}
     assert (await client.post("/provider/callback", content=body, headers=good)).status_code == 200
+
+
+async def test_media_list_shows_only_own_workspace(client):
+    mine = (await client.post("/media", headers=MEMBER_V, json=image())).json()["id"]
+    theirs = (await client.post("/media", headers=MEMBER_U, json=image())).json()["id"]
+    listed = [m["id"] for m in (await client.get("/media", headers=MEMBER_V)).json()]
+    assert str(mine) in [str(i) for i in listed]
+    assert str(theirs) not in [str(i) for i in listed]
+    assert (await client.get("/media", headers={"X-User-Id": "nobody", "X-Workspace-Id": "ws_verified"})).status_code == 404

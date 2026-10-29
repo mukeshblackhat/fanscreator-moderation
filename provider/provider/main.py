@@ -21,6 +21,7 @@ from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -54,6 +55,9 @@ class State:
 
 state = State()
 app = FastAPI(title="Fake moderation provider")
+# Lets the review page's "Try it" panel switch modes. This is a local test fake, not a real provider.
+app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(","),
+                   allow_methods=["*"], allow_headers=["*"])
 
 
 def full_scores(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
