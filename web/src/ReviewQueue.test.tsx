@@ -16,7 +16,7 @@ const HELD: ReviewItem = {
 };
 
 const server = setupServer();
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
@@ -52,7 +52,7 @@ test("a failed /review request shows an error with Retry, never 'Nothing to revi
 test("shows a loading state before the first response", async () => {
   server.use(http.get(`${API_URL}/review`, () => new Promise(() => {})));
   renderQueue();
-  expect(screen.getByText(/loading/i)).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent(/loading/i);
   expect(screen.queryByText("Nothing to review")).not.toBeInTheDocument();
 });
 

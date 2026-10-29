@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch, type Identity } from "./api";
+import { ApiError, apiFetch, type Identity } from "./api";
 
 export type ReviewItem = {
   id: string;
@@ -15,18 +15,11 @@ export function ReviewQueue({ who }: { who: Identity }) {
   const queryClient = useQueryClient();
   const key = ["review", who.userId, who.workspaceId];
 
-  // DELIBERATELY BROKEN (incident symptom 5): a failed request is swallowed
-  // and rendered exactly like an empty queue. Moderators saw "Nothing to
-  // review" while 40 items waited. Fixed in a later commit.
+  // Three distinct states. A failed request is an error, never an empty
+  // queue: that is how moderators saw "Nothing to review" while 40 items waited.
   const query = useQuery({
     queryKey: key,
-    queryFn: async () => {
-      try {
-        return await apiFetch<ReviewItem[]>("/review", who);
-      } catch {
-        return [] as ReviewItem[];
-      }
-    },
+    queryFn: () => apiFetch<ReviewItem[]>("/review", who),
     refetchInterval: 5000,
   });
 
@@ -36,12 +29,39 @@ export function ReviewQueue({ who }: { who: Identity }) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
 
-  if (query.isPending) return <p>Loading…</p>;
+  if (query.isPending) {
+    return (
+      <p role="status" aria-busy="true" style={{ color: "#666" }}>
+        Loading review queue…
+      </p>
+    );
+  }
 
-  const items = query.data ?? [];
+  if (query.isError) {
+    const status = query.error instanceof ApiError ? query.error.status : undefined;
+    return (
+      <div role="alert" style={{ border: "1px solid #c62828", background: "#fdecea", padding: "0.75rem", borderRadius: 6 }}>
+        <strong>Could not load the review queue</strong>
+        {status !== undefined ? ` (HTTP ${status})` : " (network error)"}. Items may be waiting.{" "}
+        <button onClick={() => query.refetch()} disabled={query.isFetching}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const items = query.data;
   if (items.length === 0) return <p>Nothing to review</p>;
 
   return (
+    <>
+      {act.isError && (
+        <p role="alert" style={{ color: "#c62828" }}>
+          {act.error instanceof ApiError && act.error.status === 409
+            ? "That item cannot be approved: it was never screened."
+            : `Action failed: ${act.error.message}`}
+        </p>
+      )}
     <table style={{ width: "100%", borderCollapse: "collapse" }}>
       <thead>
         <tr style={{ textAlign: "left" }}>
@@ -78,5 +98,6 @@ export function ReviewQueue({ who }: { who: Identity }) {
         })}
       </tbody>
     </table>
+    </>
   );
 }
