@@ -31,6 +31,8 @@ export function Counters() {
     </div>
   );
   return (
+    <>
+    <p className="sub" style={{ margin: "1.25rem 0 -0.5rem" }}>Platform-wide, all workspaces · live</p>
     <div aria-label="Live counters" className="stats">
       {stat("Published", s.media_by_status.published ?? 0)}
       {stat("Pending", s.media_by_status.pending ?? 0)}
@@ -44,5 +46,6 @@ export function Counters() {
         </div>
       )}
     </div>
+    </>
   );
 }
