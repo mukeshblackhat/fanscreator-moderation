@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { USERS, type Identity } from "./api";
+import { Counters } from "./Counters";
 import { ReviewQueue } from "./ReviewQueue";
 
 export function App() {
@@ -23,6 +24,7 @@ export function App() {
           </select>
         </label>
       </header>
+      <Counters />
       <ReviewQueue who={who} />
     </main>
   );

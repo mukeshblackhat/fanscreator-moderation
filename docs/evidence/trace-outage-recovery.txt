@@ -1,0 +1,22 @@
+# One media item through an outage and recovery, fixed pipeline, 2 workers
+# Command: grep -h <media_id> api.log worker1.log worker2.log (JSON lines, sorted by time, key fields shown)
+# Provider: timeout -> (blind probe while still down) -> ok. Final: published, 5 provider calls, approve while unscreened returned 409.
+
+09:27:03.963 {"event": "media_received", "lane": "image"}
+09:27:03.984 {"event": "job_claimed", "lane": "image", "attempt": 1}
+09:27:06.074 {"event": "provider_answered", "lane": "image", "attempt": 1, "outcome": "timeout", "duration_ms": 2090}
+09:27:06.084 {"event": "job_retry_scheduled", "lane": "image", "attempt": 1, "outcome": "timeout"}
+09:27:06.359 {"event": "job_claimed", "lane": "image", "attempt": 2}
+09:27:08.435 {"event": "provider_answered", "lane": "image", "attempt": 2, "outcome": "timeout", "duration_ms": 2076}
+09:27:08.443 {"event": "job_retry_scheduled", "lane": "image", "attempt": 2, "outcome": "timeout"}
+09:27:10.179 {"event": "job_claimed", "lane": "image", "attempt": 3}
+09:27:12.241 {"event": "provider_answered", "lane": "image", "attempt": 3, "outcome": "timeout", "duration_ms": 2063}
+09:27:12.251 {"event": "media_held", "lane": "image", "attempt": 3, "held_reason_kind": "screening_unavailable", "reason": "screening_unavailable:timeout"}
+09:27:13.272 {"event": "rescreen_enqueued", "breaker": "closed"}
+09:27:13.317 {"event": "job_claimed", "lane": "rescreen", "attempt": 1}
+09:27:15.419 {"event": "provider_answered", "lane": "rescreen", "attempt": 1, "outcome": "timeout", "duration_ms": 2101}
+09:27:15.431 {"event": "media_held", "lane": "rescreen", "attempt": 1, "held_reason_kind": "screening_unavailable", "reason": "screening_unavailable:timeout"}
+09:27:43.329 {"event": "rescreen_enqueued", "breaker": "closed"}
+09:27:43.342 {"event": "job_claimed", "lane": "rescreen", "attempt": 1}
+09:27:43.418 {"event": "provider_answered", "lane": "rescreen", "attempt": 1, "outcome": "ok", "duration_ms": 77}
+09:27:43.434 {"event": "media_decided", "lane": "rescreen", "attempt": 1, "status": "published"}

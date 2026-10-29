@@ -71,26 +71,30 @@ async def tick() -> dict[str, int]:
         leader = (await session.execute(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": LOCK_KEY})).scalar()
         if not leader:
             return {"rescreened": 0, "resubmitted": 0}
+        state = await breaker.state()
+        last_ok = await breaker.last_success()
+        since = datetime.fromtimestamp(last_ok, timezone.utc) if last_ok else None
+        recovered = (await session.execute(text(
+            """
+            SELECT EXISTS (SELECT 1 FROM media WHERE status = 'held' AND rescreen_pending
+                           AND updated_at < CAST(:since AS timestamptz))
+            """
+        ), {"since": since})).scalar() if since and state in ("closed", "unknown") else False
         waiting = (await session.execute(text(
             "SELECT EXISTS (SELECT 1 FROM media WHERE status = 'held' AND rescreen_pending)"
         ))).scalar()
-        state = await breaker.state()
-        last_ok = await breaker.last_success()
-        since = None
-        if state in ("closed", "unknown") and last_ok is not None:
-            # The provider answered since these items were held: release a batch of them.
-            limit, since = settings.rescreen_batch_size, datetime.fromtimestamp(last_ok, timezone.utc)
+        if recovered:
+            # The provider answered after these items were held: release a batch.
+            limit = settings.rescreen_batch_size
         elif waiting and await breaker.claim_rescreen_probe(settings.rescreen_probe_window_seconds):
-            limit = 1  # no sign of recovery yet: one item acts as the probe
+            # No sign of recovery yet: one item acts as the probe.
+            limit, since = 1, None
         else:
-            limit = 0
-        if not waiting:
             limit = 0
         rescreened = (await session.execute(RESCREEN_SQL, {"limit": limit, "since": since})).all() if limit else []
         resubmitted = (await session.execute(WATCHDOG_SQL, {"timeout": settings.callback_timeout_seconds})).all()
-    if rescreened:
-        log.info("rescreen_enqueued", count=len(rescreened), breaker=state,
-                 media_ids=[str(r.media_id) for r in rescreened[:10]])
+    for r in rescreened:  # one line per item, so grepping a media_id shows its whole story
+        log.info("rescreen_enqueued", media_id=str(r.media_id), breaker=state, batch=len(rescreened))
     for row in resubmitted:
         log.warning("callback_timeout_resubmit", job_id=row.id, media_id=str(row.media_id),
                     note="no callback in time; resubmitting may cost a second provider call")

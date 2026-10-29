@@ -91,3 +91,12 @@ After this migration, `published` requires a `scores` row with exactly `frame_co
 
 ## 25. Prompt gate: rules now, classifier later
 Normalise (NFKC, lowercase, zero-width removal, joined split letters, digit and symbol substitutions, long repeats), then short synthetic term lists per category and age patterns under 18 in digits or words. Known limits: no translation, paraphrase gets through, and some innocent text will be over-blocked. Production would add a safety classifier with our own category definitions, check negative prompts, reference images and LoRAs, and rate limit accounts that keep probing. The output of a clean prompt is screened like any upload either way.
+
+## 26. A re-screen gets one try
+A re-screen job is itself a probe of a provider that just failed, so its timeout/5xx budget is 1, not 3. During a long quiet outage each probe costs one call, not three. Normal jobs keep the budget of 3.
+
+## 27. Quiet outages recover within the probe window
+If traffic is low during an outage, nothing proves the provider is back until the next probe, at most 30 s (`RESCREEN_PROBE_WINDOW_SECONDS`) after it recovers. With real traffic, the first successful answer releases held items on the next tick (5 s). Shorter windows recover faster but pay for more blind probes.
+
+## 28. /metrics/summary is internal and unauthenticated
+It returns counts only (no media ids, no content). In production it would sit behind the internal network or an admin token.

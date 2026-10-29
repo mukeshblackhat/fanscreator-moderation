@@ -175,12 +175,13 @@ async def _maybe_hold_for_outage(job: ClaimedJob) -> bool:
     return False
 
 
-async def process(job: ClaimedJob) -> None:
+async def process(job: ClaimedJob, worker_id: str = "") -> None:
     with structlog.contextvars.bound_contextvars(
         job_id=job.id, media_id=str(job.media_id), workspace_id=job.workspace_id,
         lane=job.lane, attempt=job.attempts,
     ):
         started = time.monotonic()
+        log.info("job_claimed", worker_id=worker_id, frame_count=job.frame_count)
         existing = await _existing_scores(job.media_id)
         if existing is not None:
             log.info("scores_already_stored", note="previous attempt saved scores; deciding without a new call")
@@ -223,7 +224,10 @@ async def _handle(job: ClaimedJob, call_id: uuid.UUID, outcome: ProviderOutcome)
     if outcome.kind in FAILURE_OUTCOMES:
         await breaker.record_failure()
         failures = sum(counts.get(k, 0) for k in FAILURE_OUTCOMES)
-        if failures >= settings.max_failure_attempts:
+        # A re-screen is itself a probe of a provider that just failed: one try,
+        # then back to held. The loop will try again later at no extra cost.
+        budget = 1 if job.lane == "rescreen" else settings.max_failure_attempts
+        if failures >= budget:
             await hold(job, "screening_unavailable", f"screening_unavailable:{outcome.kind}")
             return
         delay = queue.backoff_seconds(failures)
@@ -332,7 +336,7 @@ async def lane_loop(lane: str, worker_id: str, idle: float = 0.1) -> None:
             await asyncio.sleep(idle)
             continue
         try:
-            await process(job)
+            await process(job, worker_id)
         except Exception:
             # The lease runs out and another worker retries. Media stays pending (invisible).
             log.exception("job_crashed", job_id=job.id, media_id=str(job.media_id), worker_id=worker_id)
