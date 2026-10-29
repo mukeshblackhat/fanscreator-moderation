@@ -1,0 +1,244 @@
+# Regression tests against the deliberately broken v0 (SCREENING_MODE=broken)
+# Run: 2026-10-29T05:30:39Z. Expected: every incident symptom test FAILS.
+
+=== api (pytest) against v0 ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.2.0, pluggy-1.7.0 -- /home/claude/fanscreator-moderation/api/.venv/bin/python
+SCREENING_MODE=broken  database=moderation_test
+rootdir: /home/claude/fanscreator-moderation/api
+configfile: pyproject.toml
+testpaths: tests
+plugins: asyncio-1.4.1, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=session, asyncio_default_test_loop_scope=session
+collecting ... collected 82 items
+
+tests/test_access.py::test_missing_headers_is_401 PASSED                 [  1%]
+tests/test_access.py::test_unknown_user_gets_404_on_media PASSED         [  2%]
+tests/test_access.py::test_member_cannot_list_review PASSED              [  3%]
+tests/test_access.py::test_media_input_shape PASSED                      [  4%]
+tests/test_access.py::test_hold_is_visible_to_own_admin_only_and_reviewable PASSED [  6%]
+tests/test_access.py::test_rejecting_a_hold_blocks_it PASSED             [  7%]
+tests/test_access.py::test_callback_signature PASSED                     [  8%]
+tests/test_incident.py::test_provider_timeout_never_publishes FAILED     [  9%]
+tests/test_incident.py::test_explicit_only_on_frame_55_of_60_is_blocked_when_unverified FAILED [ 10%]
+tests/test_incident.py::test_minor_only_on_last_frame_is_blocked_even_when_verified FAILED [ 12%]
+tests/test_incident.py::test_refused_prompt_never_reaches_generator_or_provider FAILED [ 13%]
+tests/test_incident.py::test_redelivered_job_calls_provider_once FAILED  [ 14%]
+tests/test_incident.py::test_duplicate_callback_is_a_no_op FAILED        [ 15%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.4999-published-minor] PASSED [ 17%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.4999-published-sexual_violence] PASSED [ 18%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.4999-published-bestiality] PASSED [ 19%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.4999-published-self_harm] PASSED [ 20%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.4999-published-real_person] PASSED [ 21%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.5-held-minor] PASSED [ 23%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.5-held-sexual_violence] PASSED [ 24%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.5-held-bestiality] PASSED [ 25%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.5-held-self_harm] PASSED [ 26%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.5-held-real_person] PASSED [ 28%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.7999-held-minor] PASSED [ 29%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.7999-held-sexual_violence] PASSED [ 30%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.7999-held-bestiality] PASSED [ 31%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.7999-held-self_harm] PASSED [ 32%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.7999-held-real_person] PASSED [ 34%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.8-blocked-minor] PASSED [ 35%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.8-blocked-sexual_violence] PASSED [ 36%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.8-blocked-bestiality] PASSED [ 37%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.8-blocked-self_harm] PASSED [ 39%]
+tests/test_policy.py::test_prohibited_boundaries[True-0.8-blocked-real_person] PASSED [ 40%]
+tests/test_policy.py::test_prohibited_boundaries[True-1.0-blocked-minor] PASSED [ 41%]
+tests/test_policy.py::test_prohibited_boundaries[True-1.0-blocked-sexual_violence] PASSED [ 42%]
+tests/test_policy.py::test_prohibited_boundaries[True-1.0-blocked-bestiality] PASSED [ 43%]
+tests/test_policy.py::test_prohibited_boundaries[True-1.0-blocked-self_harm] PASSED [ 45%]
+tests/test_policy.py::test_prohibited_boundaries[True-1.0-blocked-real_person] PASSED [ 46%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.4999-published-minor] PASSED [ 47%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.4999-published-sexual_violence] PASSED [ 48%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.4999-published-bestiality] PASSED [ 50%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.4999-published-self_harm] PASSED [ 51%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.4999-published-real_person] PASSED [ 52%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.5-held-minor] PASSED [ 53%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.5-held-sexual_violence] PASSED [ 54%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.5-held-bestiality] PASSED [ 56%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.5-held-self_harm] PASSED [ 57%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.5-held-real_person] PASSED [ 58%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.7999-held-minor] PASSED [ 59%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.7999-held-sexual_violence] PASSED [ 60%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.7999-held-bestiality] PASSED [ 62%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.7999-held-self_harm] PASSED [ 63%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.7999-held-real_person] PASSED [ 64%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.8-blocked-minor] PASSED [ 65%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.8-blocked-sexual_violence] PASSED [ 67%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.8-blocked-bestiality] PASSED [ 68%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.8-blocked-self_harm] PASSED [ 69%]
+tests/test_policy.py::test_prohibited_boundaries[False-0.8-blocked-real_person] PASSED [ 70%]
+tests/test_policy.py::test_prohibited_boundaries[False-1.0-blocked-minor] PASSED [ 71%]
+tests/test_policy.py::test_prohibited_boundaries[False-1.0-blocked-sexual_violence] PASSED [ 73%]
+tests/test_policy.py::test_prohibited_boundaries[False-1.0-blocked-bestiality] PASSED [ 74%]
+tests/test_policy.py::test_prohibited_boundaries[False-1.0-blocked-self_harm] PASSED [ 75%]
+tests/test_policy.py::test_prohibited_boundaries[False-1.0-blocked-real_person] PASSED [ 76%]
+tests/test_policy.py::test_explicit[0.7999-False-published-False] PASSED [ 78%]
+tests/test_policy.py::test_explicit[0.8-False-blocked-True] PASSED       [ 79%]
+tests/test_policy.py::test_explicit[0.8-True-published-True] PASSED      [ 80%]
+tests/test_policy.py::test_explicit[0.95-True-published-True] PASSED     [ 81%]
+tests/test_policy.py::test_missing_label_scores_zero PASSED              [ 82%]
+tests/test_policy.py::test_prohibited_block_beats_explicit_publish PASSED [ 84%]
+tests/test_policy.py::test_hold_on_frame_3_and_block_on_frame_50_is_blocked PASSED [ 85%]
+tests/test_policy.py::test_hold_beats_explicit_block_in_unverified PASSED [ 86%]
+tests/test_policy.py::test_every_frame_counts_not_a_prefix PASSED        [ 87%]
+tests/test_policy.py::test_reasons_name_label_and_frame PASSED           [ 89%]
+tests/test_scaffold.py::test_health PASSED                               [ 90%]
+tests/test_scaffold.py::test_seed_is_idempotent PASSED                   [ 91%]
+tests/test_scaffold.py::test_db_refuses_published_without_decision PASSED [ 92%]
+tests/test_scaffold.py::test_db_refuses_published_with_partial_decision PASSED [ 93%]
+tests/test_scaffold.py::test_db_refuses_published_with_non_publish_decision PASSED [ 95%]
+tests/test_scaffold.py::test_db_allows_published_with_complete_decision PASSED [ 96%]
+tests/test_scaffold.py::test_db_allows_only_four_statuses PASSED         [ 97%]
+tests/test_scaffold.py::test_db_one_active_job_per_media PASSED          [ 98%]
+tests/test_scaffold.py::test_db_scores_at_most_once PASSED               [100%]
+
+=================================== FAILURES ===================================
+____________________ test_provider_timeout_never_publishes _____________________
+tests/test_incident.py:23: in test_provider_timeout_never_publishes
+    assert "published" not in seen, f"published without a decision during an outage (saw {seen})"
+E   AssertionError: published without a decision during an outage (saw ['pending', 'published'])
+E   assert 'published' not in ['pending', 'published']
+----------------------------- Captured stdout call -----------------------------
+2026-10-29 05:29:27 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-0
+2026-10-29 05:29:27 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-1
+2026-10-29 05:29:28 [info     ] job_claimed                    job_id=4 mode=broken worker_id=test-worker-1
+2026-10-29 05:29:28 [info     ] provider_answered              attempt=1 http_status=None job_id=4 media_id=e36d0fd7-b4b8-458b-addd-e216bf66a05a mode=broken outcome=timeout workspace_id=ws_unverified
+2026-10-29 05:29:28 [info     ] media_decided                  attempt=1 frame_count=1 frames_scored=1 job_id=4 media_id=e36d0fd7-b4b8-458b-addd-e216bf66a05a mode=broken status=published workspace_id=ws_unverified
+_______ test_explicit_only_on_frame_55_of_60_is_blocked_when_unverified ________
+tests/test_incident.py:34: in test_explicit_only_on_frame_55_of_60_is_blocked_when_unverified
+    assert final == "blocked", f"late explicit frame was missed: final {final}, saw {seen}"
+E   AssertionError: late explicit frame was missed: final published, saw ['pending', 'published']
+E   assert 'published' == 'blocked'
+E     
+E     - blocked
+E     + published
+----------------------------- Captured stdout call -----------------------------
+2026-10-29 05:29:28 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-0
+2026-10-29 05:29:28 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-1
+2026-10-29 05:29:28 [info     ] job_claimed                    job_id=5 mode=broken worker_id=test-worker-0
+2026-10-29 05:29:28 [info     ] job_claimed                    job_id=5 mode=broken worker_id=test-worker-1
+2026-10-29 05:29:28 [info     ] provider_answered              attempt=2 http_status=200 job_id=5 media_id=c540aa7d-0129-4b62-acfb-73a72c8aafd3 mode=broken outcome=ok workspace_id=ws_unverified
+2026-10-29 05:29:28 [info     ] provider_answered              attempt=2 http_status=200 job_id=5 media_id=c540aa7d-0129-4b62-acfb-73a72c8aafd3 mode=broken outcome=ok workspace_id=ws_unverified
+2026-10-29 05:29:28 [info     ] media_decided                  attempt=2 frame_count=60 frames_scored=8 job_id=5 media_id=c540aa7d-0129-4b62-acfb-73a72c8aafd3 mode=broken status=published workspace_id=ws_unverified
+2026-10-29 05:29:28 [info     ] media_decided                  attempt=2 frame_count=60 frames_scored=8 job_id=5 media_id=c540aa7d-0129-4b62-acfb-73a72c8aafd3 mode=broken status=published workspace_id=ws_unverified
+_________ test_minor_only_on_last_frame_is_blocked_even_when_verified __________
+tests/test_incident.py:43: in test_minor_only_on_last_frame_is_blocked_even_when_verified
+    assert final == "blocked", f"prohibited last frame was missed: final {final}, saw {seen}"
+E   AssertionError: prohibited last frame was missed: final published, saw ['pending', 'published']
+E   assert 'published' == 'blocked'
+E     
+E     - blocked
+E     + published
+----------------------------- Captured stdout call -----------------------------
+2026-10-29 05:29:29 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-0
+2026-10-29 05:29:29 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-1
+2026-10-29 05:29:29 [info     ] job_claimed                    job_id=6 mode=broken worker_id=test-worker-0
+2026-10-29 05:29:29 [info     ] job_claimed                    job_id=6 mode=broken worker_id=test-worker-1
+2026-10-29 05:29:29 [info     ] provider_answered              attempt=2 http_status=200 job_id=6 media_id=3f5f1945-7f93-4f01-bb77-d3ed68e98620 mode=broken outcome=ok workspace_id=ws_verified
+2026-10-29 05:29:29 [info     ] provider_answered              attempt=2 http_status=200 job_id=6 media_id=3f5f1945-7f93-4f01-bb77-d3ed68e98620 mode=broken outcome=ok workspace_id=ws_verified
+2026-10-29 05:29:29 [info     ] media_decided                  attempt=2 frame_count=60 frames_scored=8 job_id=6 media_id=3f5f1945-7f93-4f01-bb77-d3ed68e98620 mode=broken status=published workspace_id=ws_verified
+2026-10-29 05:29:29 [info     ] media_decided                  attempt=2 frame_count=60 frames_scored=8 job_id=6 media_id=3f5f1945-7f93-4f01-bb77-d3ed68e98620 mode=broken status=published workspace_id=ws_verified
+___________ test_refused_prompt_never_reaches_generator_or_provider ____________
+tests/test_incident.py:57: in test_refused_prompt_never_reaches_generator_or_provider
+    assert r.status_code == 422, f"prompt was accepted with {r.status_code}"
+E   AssertionError: prompt was accepted with 202
+E   assert 202 == 422
+E    +  where 202 = <Response [202 Accepted]>.status_code
+----------------------------- Captured stdout call -----------------------------
+2026-10-29 05:29:29 [info     ] generator_called               frames=1 prompt_chars=26 workspace_id=ws_verified
+2026-10-29 05:29:29 [info     ] media_received                 frame_count=1 lane=image media_id=cd176fd0-a259-4981-8999-f35277dca735 source=generated type=image workspace_id=ws_verified
+___________________ test_redelivered_job_calls_provider_once ___________________
+tests/test_incident.py:75: in test_redelivered_job_calls_provider_once
+    assert calls == 1, f"provider was called {calls} times for one upload"
+E   AssertionError: provider was called 2 times for one upload
+E   assert 2 == 1
+----------------------------- Captured stdout call -----------------------------
+2026-10-29 05:29:29 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-0
+2026-10-29 05:29:29 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-1
+2026-10-29 05:29:29 [info     ] job_claimed                    job_id=8 mode=broken worker_id=test-worker-0
+2026-10-29 05:29:29 [info     ] job_claimed                    job_id=8 mode=broken worker_id=test-worker-1
+2026-10-29 05:29:33 [info     ] provider_answered              attempt=2 http_status=200 job_id=8 media_id=652688d7-2fde-45f1-a29e-3cecaefc2a77 mode=broken outcome=ok workspace_id=ws_verified
+2026-10-29 05:29:33 [info     ] provider_answered              attempt=2 http_status=200 job_id=8 media_id=652688d7-2fde-45f1-a29e-3cecaefc2a77 mode=broken outcome=ok workspace_id=ws_verified
+2026-10-29 05:29:33 [info     ] media_decided                  attempt=2 frame_count=1 frames_scored=1 job_id=8 media_id=652688d7-2fde-45f1-a29e-3cecaefc2a77 mode=broken status=published workspace_id=ws_verified
+2026-10-29 05:29:33 [info     ] media_decided                  attempt=2 frame_count=1 frames_scored=1 job_id=8 media_id=652688d7-2fde-45f1-a29e-3cecaefc2a77 mode=broken status=published workspace_id=ws_verified
+______________________ test_duplicate_callback_is_a_no_op ______________________
+tests/test_incident.py:90: in test_duplicate_callback_is_a_no_op
+    assert scores_rows == 1, f"expected exactly one stored score for the video, found {scores_rows}"
+E   AssertionError: expected exactly one stored score for the video, found 0
+E   assert 0 == 1
+----------------------------- Captured stdout call -----------------------------
+2026-10-29 05:29:36 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-0
+2026-10-29 05:29:36 [warning  ] broken_handler_running         note='SCREENING_MODE=broken reproduces the incident on purpose' worker_id=test-worker-1
+2026-10-29 05:29:36 [info     ] job_claimed                    job_id=9 mode=broken worker_id=test-worker-1
+2026-10-29 05:29:36 [info     ] job_claimed                    job_id=9 mode=broken worker_id=test-worker-0
+2026-10-29 05:29:36 [info     ] provider_answered              attempt=2 http_status=200 job_id=9 media_id=8b3cf546-8bec-4c85-925f-072f806cb9fa mode=broken outcome=ok workspace_id=ws_verified
+2026-10-29 05:29:37 [info     ] provider_answered              attempt=2 http_status=200 job_id=9 media_id=8b3cf546-8bec-4c85-925f-072f806cb9fa mode=broken outcome=ok workspace_id=ws_verified
+2026-10-29 05:29:37 [info     ] media_decided                  attempt=2 frame_count=40 frames_scored=8 job_id=9 media_id=8b3cf546-8bec-4c85-925f-072f806cb9fa mode=broken status=published workspace_id=ws_verified
+2026-10-29 05:29:37 [info     ] media_decided                  attempt=2 frame_count=40 frames_scored=8 job_id=9 media_id=8b3cf546-8bec-4c85-925f-072f806cb9fa mode=broken status=published workspace_id=ws_verified
+=========================== short test summary info ============================
+FAILED tests/test_incident.py::test_provider_timeout_never_publishes - Assert...
+FAILED tests/test_incident.py::test_explicit_only_on_frame_55_of_60_is_blocked_when_unverified
+FAILED tests/test_incident.py::test_minor_only_on_last_frame_is_blocked_even_when_verified
+FAILED tests/test_incident.py::test_refused_prompt_never_reaches_generator_or_provider
+FAILED tests/test_incident.py::test_redelivered_job_calls_provider_once - Ass...
+FAILED tests/test_incident.py::test_duplicate_callback_is_a_no_op - Assertion...
+======================== 6 failed, 76 passed in 17.68s =========================
+
+=== web (vitest) against v0 ===
+
+> moderation-web@0.1.0 test /home/claude/fanscreator-moderation/web
+> vitest run
+
+
+ RUN  v5.0.5 /home/claude/fanscreator-moderation/web
+
+ ❯ src/ReviewQueue.test.tsx (4 tests | 1 failed) 1251ms
+   × a failed /review request shows an error with Retry, never 'Nothing to review' 1040ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ReviewQueue.test.tsx > a failed /review request shows an error with Retry, never 'Nothing to review'
+TestingLibraryElementError: Unable to find role="alert"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <p>
+      Nothing to review
+    </p>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <p>
+      Nothing to review
+    </p>
+  </div>
+</body>
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/ReviewQueue.test.tsx:43:30
+     41|   renderQueue();
+     42|
+     43|   const alert = await screen.findByRole("alert");
+       |                              ^
+     44|   expect(alert).toHaveTextContent("500");
+     45|   expect(screen.queryByText("Nothing to review")).not.toBeInTheDocumen…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 4 passed (5)
+   Start at  11:00:17
+   Duration  3.24s (tests 47%, environment 39%, setup 7%, import 6%, transform 1%)
+
+    Isolate  2 workers spawned · ~692ms startup each (spawn + environment, per file)
+             at least ~692ms faster with isolate: false — reuses workers across files instead of one per file
+
+ ELIFECYCLE  Test failed. See above for more details.

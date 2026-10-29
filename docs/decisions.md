@@ -58,3 +58,9 @@ The task fixes 404 for media reads and 403 for review actions. For `POST /media`
 
 ## 14. Generator is a counted stub
 There is no real model. `app/generator.py` counts and logs calls, so tests can prove a refused prompt never reaches it.
+
+## 15. How "unchecked published" is counted
+The workload counts a media item as unchecked published if it is published and either (a) its current decision does not cover every frame, or (b) the policy run over all of its true frame scores says it should not be published (this also covers refused prompts that slipped through). (b) is what catches v0, because v0's decision rows lied about coverage.
+
+## 16. Test harness runs real services
+Tests start the real fake provider and the real API as subprocesses on ports 18001 and 18000, so timeouts, 202s and signed callbacks behave like they do in compose. Workers run in-process so a test controls how many there are. `SCREENING_MODE` picks which pipeline the suite runs against.

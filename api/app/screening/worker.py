@@ -16,12 +16,8 @@ from app.db import engine
 from app.logging import configure_logging, log
 
 
-async def main() -> None:
-    configure_logging(settings.log_level)
-    worker_id = f"{socket.gethostname()}:{os.getpid()}"
-    async with engine.connect() as conn:
-        await conn.execute(text("SELECT 1"))
-    log.info("worker_start", worker_id=worker_id, screening_mode=settings.screening_mode)
+async def run(worker_id: str) -> None:
+    """One worker loop for the configured mode. Tests run this in-process."""
     if settings.screening_mode == "broken":
         from app.screening import broken_handler
 
@@ -31,6 +27,15 @@ async def main() -> None:
                 note="jobs stay pending until the fix commits; nothing is published")
     while True:
         await asyncio.sleep(5)
+
+
+async def main() -> None:
+    configure_logging(settings.log_level)
+    worker_id = f"{socket.gethostname()}:{os.getpid()}"
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+    log.info("worker_start", worker_id=worker_id, screening_mode=settings.screening_mode)
+    await run(worker_id)
 
 
 if __name__ == "__main__":
