@@ -35,7 +35,15 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api python /srv/scripts/demo_data.py --api http://localhost:8000 --provider http://provider:8001
 ```
 
-The API and provider reload on save, the workers restart on any Python change, and the review page hot-reloads. `scripts/demo_data.py` fills both workspaces through the real pipeline (add `--outage` to also see held items recover by themselves). The review page has three tabs: the review queue, all media with readable reasons, and **Try it**, which has one-click test uploads and switches for the fake provider's mode (healthy, outage, 500s, slow, 429, bad answers).
+The API and provider reload on save, the workers restart on any Python change, and the review page hot-reloads. `scripts/demo_data.py` fills both workspaces through the real pipeline (add `--outage` to also see held items recover by themselves).
+
+The page has a **fake provider bar on every tab**. It switches the provider to healthy, slow (with a delay you set), outage, 500s, 429 or bad answers, toggles duplicate callbacks, and resets the counts. It uses the same `/_control` endpoint as the graders' checks. Below it are three tabs:
+- **Review queue**
+- **All media**, with readable reasons
+- **Try it**, which has:
+  - a prompt tester: prompt and negative-prompt fields, example cases for every band, score bars with the 0.5 and 0.8 thresholds, the rules that fired, and Generate with a choice of output scores
+  - real file uploads
+  - one-click synthetic test media
 
 ### Real uploads (optional extra, beyond the task's scope)
 
@@ -57,10 +65,10 @@ The API tests need a throwaway Postgres database and Redis. The harness migrates
 cd api
 uv sync
 TEST_DATABASE_URL=postgresql+asyncpg://moderation:moderation@localhost:5432/moderation_test \
-  SCREENING_MODE=fixed uv run pytest -v           # 147 tests
+  SCREENING_MODE=fixed uv run pytest -v           # 186 tests
 cd ../provider && uv sync && uv run pytest        # 6 tests
 cd ../provider_real && uv sync && uv run pytest   # 7 tests (stub model, no downloads)
-cd ../web && pnpm install && pnpm test            # 15 tests
+cd ../web && pnpm install && pnpm test            # 22 tests
 ```
 
 ### Workload, report and crash test
@@ -82,6 +90,7 @@ uv run python ../scripts/crash_test.py --out ../docs/evidence/05-crash-test.json
 | `GET /review` | admins | held media of their own workspace; members `403` |
 | `POST /review/{id}/approve`, `/reject` | admins | `200`; members `403`; other workspace `404`; unscreened hold `409` |
 | `POST /provider/callback` | provider | `200`; missing or wrong HMAC-SHA256 signature `401` |
+| `POST /prompts/check`, `GET /prompts/events` | members (extra) | prompt scores and decision without generating; recent decisions of the workspace (no prompt text) |
 
 Identity comes from `X-User-Id` and `X-Workspace-Id` (missing either is `401`).
 
@@ -116,9 +125,25 @@ Evidence against v0:
 | --- | --- | --- | --- |
 | Uploads went live unchecked | A timeout is never a pass. Timeouts and 5xx retry 3 times with exponential backoff and full jitter, 429 honours `Retry-After` with its own budget of 10, and a malformed answer gets 2 tries. Running out of budget means `held`. A Redis circuit breaker stops calls after 5 failures in 30 s and probes every 10 s. | Every unknown resolves toward "not live" | `test_provider_timeout_never_publishes`, `test_recovery.py` |
 | Late explicit frame went live | Every frame goes to the provider, and an answer must cover frames 0 to n-1 exactly. Videos over 30 frames use the signed async callback. Migration 0002 also makes the database refuse `published` unless stored scores cover every frame. | Decision rows can lie; stored scores can't | `test_explicit_only_on_frame_55_of_60...`, `test_minor_only_on_last_frame...`, `test_db_refuses_published_when_decision_lies_about_coverage` |
-| Prompt for a 16-year-old reached the generator | The prompt gate runs before generation: normalise (NFKC, zero-width removal, split letters, digit substitutions), then rules per category, plus ages under 18 in digits or words. A refused prompt returns `422`, and the generator and provider get zero calls. | Stop intent before spending anything | `test_refused_prompt_never_reaches_generator_or_provider`, 30 cases in `test_prompt_gate.py` |
+| Prompt for a 16-year-old reached the generator | A prompt engine scores every generation prompt before anything runs (details below). A refused prompt returns `422` and the generator and provider get zero calls. | Stop intent before spending anything | `test_refused_prompt_never_reaches_generator_or_provider`, `test_prompt_gate.py`, `test_prompt_scoring.py`, `test_prompt_engine.py` |
 | Uploads scored 2 or 3 times | `FOR UPDATE SKIP LOCKED` claims with a lease and a fencing token. A `provider_calls` row is committed before every call. `scores` has its primary key on `media_id`, and callback receipts make a duplicate a no-op. | Score once, on purpose | `test_redelivered_job_calls_provider_once`, `test_duplicate_callback_is_a_no_op`, `test_stale_worker_write_is_fenced` |
 | "Nothing to review" while 40 waited | The review page has three distinct states: loading, an error with the HTTP status and a Retry button, and "Nothing to review" only after a successful empty response. Live counters show pending, held, oldest wait and provider state. | A failure must never look like an empty queue | `ReviewQueue.test.tsx` |
+
+**The prompt engine** (`api/app/screening/prompt_gate.py`) scores a generation prompt 0 to 1 on each prohibited category, plus incest and trafficking, on the same scale as media:
+
+| Score | Decision | What happens |
+| --- | --- | --- |
+| any category 0.8 or more | refuse | `422 {"reasons": ["prompt:minor"]}`; nothing is generated or scored |
+| any category 0.5 to 0.8 | review | generated, but the output is held for a human (`review:prompt_minor`), even if it scores clean |
+| below 0.5 | allow | generated; the output is screened like any upload |
+
+How it scores:
+- **Normalising first** defeats spacing, digit and Unicode tricks ("t.e.e.n", "t33n", full-width letters).
+- **Weighted rules per category.** Strong terms score high on their own ("child", a stated age under 18, "rape"). Weak terms only count, or count more, with sexual context: "young" alone is 0.3, but "young" next to "nude" is 0.65 (review); "unconscious" next to "nude" is 0.9 (refuse).
+- **The negative prompt is checked too.** Excluding "adult" or "mature" from a sexual prompt is asking for a minor (0.9, refuse).
+- **`explicit` is scored for information only**, since adults are allowed.
+- **Every decision is recorded in `prompt_events`** with a SHA-256 of the prompt and its length, never the text. That's enough to spot an account that keeps probing.
+- **`POST /prompts/check`** scores a prompt without generating anything. The Try it tab uses it.
 
 Recovery needs no human. Outage holds are released once the provider has answered again, at up to 50 items per 2 s, taking turns across workspaces. Before there's any sign of recovery, one item is released every 30 s as a probe. Approving an unscreened hold returns `409`, because that would publish something nobody checked.
 

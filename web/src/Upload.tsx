@@ -13,13 +13,13 @@ type RealMode = {
   not_checked_labels?: string[];
 };
 
-type Sent = { id: string; name: string; frames: number; at: string };
+export type Sent = { id: string; name: string; frames: number; at: string };
 const LABEL: Record<string, string> = {
   explicit: "explicit", self_harm: "self-harm", sexual_violence: "sexual violence",
   minor: "age (minor)", real_person: "real person", bestiality: "animals",
 };
 
-function Live({ who, item }: { who: Identity; item: Sent }) {
+export function Live({ who, item, images = true }: { who: Identity; item: Sent; images?: boolean }) {
   const q = useQuery({
     queryKey: ["media-one", who.userId, item.id],
     queryFn: () => apiFetch<{ id: string; status: string; reasons: string[] }>(`/media/${item.id}`, who),
@@ -28,7 +28,7 @@ function Live({ who, item }: { who: Identity; item: Sent }) {
   const status = q.data?.status ?? "pending";
   return (
     <li>
-      {status === "published" || (status === "held" && who.role === "admin") ? (
+      {images && (status === "published" || (status === "held" && who.role === "admin")) ? (
         <Frame who={who} mediaId={item.id} index={flaggedFrame(q.data?.reasons ?? [])} sensitive={status !== "published"} size={48} />
       ) : null}
       <span className="sub">{item.at}</span>

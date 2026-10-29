@@ -23,6 +23,9 @@ async def summary(session: AsyncSession = Depends(get_session)) -> dict[str, Any
     held_rows = (await session.execute(text(
         "SELECT held_reason_kind, count(*) FROM media WHERE status = 'held' GROUP BY held_reason_kind"
     ))).all()
+    prompt_rows = (await session.execute(text(
+        "SELECT decision, count(*) FROM prompt_events WHERE kind = 'generation' GROUP BY decision"
+    ))).all()
     queue_rows = (await session.execute(text(
         """
         SELECT lane, workspace_id, state, count(*) FROM jobs
@@ -62,5 +65,6 @@ async def summary(session: AsyncSession = Depends(get_session)) -> dict[str, Any
         "unchecked_published": int(row["unchecked_published"]),
         "provider_calls_per_screened_media": round(calls / media, 3) if media else None,
         "breaker": await breaker.state(),
+        "generation_prompts_by_decision": {d: n for d, n in prompt_rows},
         "generator_calls_this_process": generator.total_calls(),
     }

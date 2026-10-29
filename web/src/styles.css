@@ -98,3 +98,31 @@ td.actions { white-space: nowrap; text-align: right; }
 .drop.over { border-color: var(--accent); background: var(--accent-soft); }
 .drop input { display: none; }
 .checks { display: flex; gap: .35rem; flex-wrap: wrap; margin: .5rem 0 0; }
+
+.field { display: block; margin-bottom: .6rem; }
+.field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: .25rem; }
+.field textarea, .field input { width: 100%; font: inherit; padding: .5rem .6rem; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); resize: vertical; }
+.examples { display: flex; flex-wrap: wrap; gap: .3rem; margin: .25rem 0 .75rem; }
+.examples button { font-size: 12px; padding: .2rem .5rem; }
+.examples button.allow { border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.examples button.review { border-color: color-mix(in srgb, var(--hold) 40%, transparent); }
+.examples button.refuse { border-color: color-mix(in srgb, var(--block) 40%, transparent); }
+.verdict { display: flex; align-items: center; gap: .6rem; margin: .75rem 0; flex-wrap: wrap; }
+.verdict .badge.allow { color: var(--ok); background: var(--ok-soft); }
+.verdict .badge.review { color: var(--hold); background: var(--hold-soft); }
+.verdict .badge.refuse { color: var(--block); background: var(--block-soft); }
+.bars { display: grid; grid-template-columns: 130px 1fr 44px; gap: .35rem .6rem; align-items: center; font-size: 12px; }
+.bar { position: relative; height: 10px; border-radius: 6px; background: var(--pending-soft); overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: 6px; }
+.bar b { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
+.hits { margin: .6rem 0 0; padding-left: 1.1rem; font-size: 12px; color: var(--muted); }
+.row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+.provider-bar { padding: .6rem 1rem; margin-bottom: 1rem; }
+.provider-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.provider-row .modes button { padding: .25rem .6rem; font-size: 13px; }
+.provider-status { margin-top: .35rem; }
+label.inline { display: inline-flex; align-items: center; gap: .3rem; }
+label.inline input[type=number] { width: 80px; font: inherit; padding: .2rem .4rem; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+button.link { border: none; background: none; color: var(--accent); padding: .2rem .3rem; }

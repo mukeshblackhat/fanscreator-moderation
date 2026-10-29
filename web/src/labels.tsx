@@ -35,6 +35,8 @@ export function describeReason(reason: string, isVideo?: boolean): { text: strin
   if (reason === "provider_malformed") return { text: "Provider sent an invalid answer", tone: "info" };
   m = reason.match(/^reviewed:(approved|rejected)_by=(.+)$/);
   if (m) return { text: `${m[1] === "approved" ? "Approved" : "Rejected"} by ${m[2]}`, tone: "plain" };
+  m = reason.match(/^review:prompt_(\w+)$/);
+  if (m) return { text: `Prompt needs review: ${(LABELS[m[1]] ?? m[1]).toLowerCase()}`, tone: "hold" };
   m = reason.match(/^prompt:(\w+)$/);
   if (m) return { text: `Prompt: ${(LABELS[m[1]] ?? m[1]).toLowerCase()}`, tone: "block" };
   return { text: reason, tone: "plain" };

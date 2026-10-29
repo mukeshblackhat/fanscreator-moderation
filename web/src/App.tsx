@@ -3,6 +3,7 @@ import { useState } from "react";
 import { apiFetch, USERS, type Identity } from "./api";
 import { Counters } from "./Counters";
 import { MediaList } from "./MediaList";
+import { ProviderControls } from "./ProviderControls";
 import { ReviewQueue, type ReviewItem } from "./ReviewQueue";
 import { TryIt } from "./TryIt";
 
@@ -42,6 +43,7 @@ export function App() {
       </header>
 
       <Counters />
+      <ProviderControls />
 
       <nav className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "review"} onClick={() => setTab("review")}>

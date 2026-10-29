@@ -40,6 +40,7 @@ class MediaIn(BaseModel):
     # Stored as "generated"; the task's "generation" is the main spelling on input.
     source: Literal["upload", "generated"] = "upload"
     prompt: str | None = None
+    negative_prompt: str | None = None  # also checked: excluding "adult" next to a sexual prompt asks for a minor
     frames: list[FrameIn] = Field(min_length=1)
 
     @model_validator(mode="before")
@@ -82,3 +83,8 @@ class ReviewItem(BaseModel):
 
 class Refused(BaseModel):
     reasons: list[str]
+
+
+class PromptCheckIn(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    negative_prompt: str | None = Field(default=None, max_length=4000)

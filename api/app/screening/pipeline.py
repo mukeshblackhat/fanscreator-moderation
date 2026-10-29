@@ -62,7 +62,7 @@ async def finalize(media_id: uuid.UUID, token: uuid.UUID, frames: list[dict[str,
     async with SessionLocal() as session, session.begin():
         media = (await session.execute(text(
             """
-            SELECT m.status, m.frame_count, m.screening_token, w.verified
+            SELECT m.status, m.frame_count, m.screening_token, m.prompt_flags, w.verified
             FROM media m JOIN workspaces w ON w.id = m.workspace_id
             WHERE m.id = :m FOR UPDATE OF m
             """
@@ -82,7 +82,7 @@ async def finalize(media_id: uuid.UUID, token: uuid.UUID, frames: list[dict[str,
             frames = (await session.execute(text("SELECT frames FROM scores WHERE media_id = :m"),
                                             {"m": media_id})).scalar_one()
 
-        decision = decide(frames, media["verified"])
+        decision = decide(frames, media["verified"], media["prompt_flags"] or [])
         decision_id = uuid.uuid4()
         await session.execute(text(
             """

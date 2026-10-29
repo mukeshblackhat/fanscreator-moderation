@@ -2,7 +2,8 @@
 
 Precedence:
 1. any prohibited label >= 0.8 on any frame  -> blocked
-2. any prohibited label in [0.5, 0.8)         -> held for a human
+2. any prohibited label in [0.5, 0.8), or a
+   generation prompt in the review band       -> held for a human
 3. explicit >= 0.8 in an unverified workspace -> blocked
 4. otherwise                                  -> published (is_explicit when explicit >= 0.8)
 """
@@ -24,10 +25,13 @@ class Decision:
     is_explicit: bool = False
 
 
-def decide(frames: Sequence[Mapping[str, float]], verified: bool) -> Decision:
-    """`frames` is one score mapping per frame, in frame order. A missing label scores 0."""
+def decide(frames: Sequence[Mapping[str, float]], verified: bool,
+           prompt_reviews: Sequence[str] = ()) -> Decision:
+    """`frames` is one score mapping per frame, in frame order. A missing label scores 0.
+    `prompt_reviews` are "review:prompt_<category>" reasons from the prompt engine's
+    review band: they hold otherwise-clean output for a human, like a 0.5 frame score."""
     blocks: list[str] = []
-    holds: list[str] = []
+    holds: list[str] = list(prompt_reviews)
     explicit = False
     for i, scores in enumerate(frames):  # every frame, never a prefix
         for label in PROHIBITED:

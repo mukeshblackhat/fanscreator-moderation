@@ -1,7 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ApiError, apiFetch, PROVIDER_URL, type Identity } from "./api";
+import { ApiError, apiFetch, type Identity } from "./api";
 import { Reasons } from "./labels";
+import { PromptTester } from "./PromptTester";
 import { Upload } from "./Upload";
 
 type Preset = { label: string; hint: string; body: () => unknown };
@@ -20,14 +21,6 @@ const PRESETS: Preset[] = [
   { label: "Generated: “a t.e.e.n posing”", hint: "refused with 422 before generating", body: () => ({ type: "image", source: "generation", prompt: "a t.e.e.n posing", frames: [{}] }) },
 ];
 
-const MODES = [
-  { mode: "ok", label: "Healthy" },
-  { mode: "timeout", label: "Outage (timeouts)" },
-  { mode: "error", label: "Errors (500)" },
-  { mode: "slow", label: "Slow (1.5 s)", delay_ms: 1500 },
-  { mode: "rate_limit", label: "Rate limited (429)" },
-  { mode: "malformed", label: "Bad answers" },
-];
 
 type LogEntry = { at: string; label: string; ok: boolean; text: string; reasons?: string[] };
 
@@ -55,33 +48,13 @@ export function TryIt({ who }: { who: Identity }) {
     onError: (e) => setLog((l) => [{ at: new Date().toLocaleTimeString(), label: "Upload", ok: false, text: e.message }, ...l]),
   });
 
-  const provider = useQuery({
-    queryKey: ["provider-stats"],
-    queryFn: async () => {
-      const r = await fetch(`${PROVIDER_URL}/_stats`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return (await r.json()) as { mode: string; calls: Record<string, number> };
-    },
-    refetchInterval: 2000,
-  });
 
-  const setMode = useMutation({
-    mutationFn: async (m: (typeof MODES)[number]) => {
-      const r = await fetch(`${PROVIDER_URL}/_control`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: m.mode, delay_ms: m.delay_ms ?? 0 }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["provider-stats"] }),
-  });
 
-  const totalCalls = provider.data ? Object.values(provider.data.calls).reduce((a, b) => a + b, 0) : 0;
 
   return (
     <div className="grid2">
       <div>
+      <PromptTester who={who} />
       <Upload who={who} />
       <section className="card">
         <div className="card-head">
@@ -105,25 +78,11 @@ export function TryIt({ who }: { who: Identity }) {
 
       <div>
         <section className="card">
-          <div className="card-head">
-            <div>
-              <h2>Fake provider</h2>
-              <p>
-                {provider.isError ? "Unreachable" : `Mode: ${provider.data?.mode ?? "…"} · ${totalCalls} calls received`}
-              </p>
-            </div>
-          </div>
           <div className="card-body">
-            <div className="modes">
-              {MODES.map((m) => (
-                <button key={m.mode} aria-pressed={provider.data?.mode === m.mode} onClick={() => setMode.mutate(m)}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            <p className="sub" style={{ marginBottom: 0 }}>
-              Controls the fake provider used by the synthetic buttons. During an outage those uploads are held as
-              “Waiting for provider”; switch back to Healthy and they re-screen by themselves, usually within 30 s.
+            <p className="sub" style={{ margin: 0 }}>
+              Provider states (healthy, slow, outage, 500s, 429, bad answers, duplicate callbacks) are switched from the
+              Fake provider bar at the top, on every tab. During an outage uploads are held as “Waiting for provider”;
+              switch back to Healthy and they re-screen by themselves, usually within 30 s.
             </p>
           </div>
         </section>

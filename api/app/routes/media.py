@@ -12,7 +12,7 @@ from app.db import get_session
 from app.identity import Caller, require_member
 from app.logging import log
 from app.schemas import MediaAccepted, MediaIn, MediaOut
-from app.screening import prompt_gate
+from app.screening import prompt_audit, prompt_gate
 
 router = APIRouter()
 
@@ -31,27 +31,41 @@ async def create_media(
     session: AsyncSession = Depends(get_session),
 ):
     frames = [f.model_dump() for f in body.frames]
+    media_id = uuid.uuid4()
+    assessment = None
     if body.source == "generated":
         assert body.prompt is not None  # enforced by MediaIn
         if settings.screening_mode == "fixed":
-            reasons = prompt_gate.check(body.prompt)
-            if reasons:
-                log.info("prompt_refused", workspace_id=caller.workspace_id, reasons=reasons)
-                return JSONResponse(status_code=422, content={"reasons": reasons})
+            assessment = prompt_gate.assess(body.prompt, body.negative_prompt)
+            log.info("prompt_assessed", workspace_id=caller.workspace_id, decision=assessment.decision,
+                     reasons=assessment.reasons, top=max(assessment.scores.items(), key=lambda kv: kv[1]))
+            if assessment.decision == "refuse":
+                async with session.begin():
+                    await prompt_audit.record(session, workspace_id=caller.workspace_id, user_id=caller.user_id,
+                                              kind="generation", prompt=body.prompt,
+                                              negative_prompt=body.negative_prompt, assessment=assessment)
+                return JSONResponse(status_code=422, content={"reasons": assessment.reasons})
         # SCREENING_MODE=broken: BUG(3), the prompt goes straight to the generator.
         frames = generator.generate(body.prompt, frames, workspace_id=caller.workspace_id)
 
-    media_id = uuid.uuid4()
     lane = "image" if body.type == "image" else "video"
     # Media and its screening job in ONE transaction: both exist or neither does.
     async with session.begin():
         await session.execute(text(
             """
-            INSERT INTO media (id, workspace_id, type, source, prompt, frame_count, frames)
-            VALUES (:id, :ws, :type, :source, :prompt, :n, CAST(:frames AS jsonb))
+            INSERT INTO media (id, workspace_id, type, source, prompt, negative_prompt, frame_count, frames,
+                               prompt_scores, prompt_flags)
+            VALUES (:id, :ws, :type, :source, :prompt, :neg, :n, CAST(:frames AS jsonb),
+                    CAST(:pscores AS jsonb), CAST(:pflags AS jsonb))
             """
         ), {"id": media_id, "ws": caller.workspace_id, "type": body.type, "source": body.source,
-            "prompt": body.prompt, "n": len(frames), "frames": json.dumps(frames)})
+            "prompt": body.prompt, "neg": body.negative_prompt, "n": len(frames), "frames": json.dumps(frames),
+            "pscores": json.dumps(assessment.scores) if assessment else None,
+            "pflags": json.dumps(assessment.reasons if assessment and assessment.decision == "review" else [])})
+        if assessment:
+            await prompt_audit.record(session, workspace_id=caller.workspace_id, user_id=caller.user_id,
+                                      kind="generation", prompt=body.prompt, negative_prompt=body.negative_prompt,
+                                      assessment=assessment, media_id=media_id)
         await session.execute(text(
             "INSERT INTO jobs (media_id, workspace_id, lane) VALUES (:m, :ws, :lane)"
         ), {"m": media_id, "ws": caller.workspace_id, "lane": lane})
@@ -70,7 +84,8 @@ async def list_media(
     review page; the graded routes above are unchanged."""
     rows = (await session.execute(text(
         """
-        SELECT id, status, reasons, type, source, prompt, frame_count, is_explicit,
+        SELECT id, status, reasons, type, source, prompt, negative_prompt, prompt_scores, prompt_flags,
+               frame_count, is_explicit,
                held_reason_kind, created_at, updated_at,
                (frames -> 0 ->> 'image') IS NOT NULL AS has_images
         FROM media WHERE workspace_id = :ws

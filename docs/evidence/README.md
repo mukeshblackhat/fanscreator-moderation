@@ -4,7 +4,7 @@
 | --- | --- |
 | `01-broken-tests.txt` | Regression tests against the deliberately broken v0 (`SCREENING_MODE=broken`, schema 0001). All 6 API incident tests and the review page error-state test fail; every other test passes. |
 | `02-broken-workload.json` | The two-workspace workload replayed against v0 on schema 0001. |
-| `03-fixed-tests.txt` | The same tests against the fix, with media in the task's format: 147 API and 15 web tests pass. |
+| `03-fixed-tests.txt` | The same tests against the fix, with media in the task's format and the prompt engine: 186 API and 22 web tests pass. |
 | `04-fixed-workload.json` | The same workload (same seed) against the fix. |
 | `05-crash-test.json` | A worker killed with `os._exit(137)` right after the provider scored a video, before the save. |
 | `trace-outage-recovery.txt` | One media item's full log story through an outage and recovery, from a single grep. |

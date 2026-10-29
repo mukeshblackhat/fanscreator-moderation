@@ -121,3 +121,15 @@ CPU scoring can take longer than the 2 s sync timeout, so the real provider alwa
 
 ## 35. The task's media format, and why both forms are accepted
 The task page shows frames as flat score objects (`{"explicit": 0.95, "self_harm": 0.1}`) and generated media as `"source": "generation"`. The build started from a transcription that used `{"scores": {...}}` and `"generated"`. The API now treats the task's format as primary and still accepts the nested form and `"generated"`, normalising both at the edge. Internally frames are stored as `{"scores": {...}}` (real uploads add an `image` path to the same object), so the pipeline did not change. A flat frame can never be read as all zeros: scores are any numeric keys, each must be 0 to 1, and anything else is a 422.
+
+## 36. Prompts are scored, with a review band, not just matched
+The first prompt gate was a yes/no term list. It now scores each category 0 to 1 with weighted rules, on the same thresholds as media: 0.8 refuses (422 before generating), 0.5 to 0.8 generates but holds the output for a human (`review:prompt_<category>`), below 0.5 is allowed. The review band is for prompts that are suspicious but not clear-cut ("school uniform", "young" next to "nude", step-family next to "naked"). Refusing those outright would over-block; allowing them silently would trust the output check alone. Holding the output lets a human decide, and it never softens a blocking output: if the output scores 0.9 on a prohibited label it is still blocked. The 422 body stays exactly `{"reasons": [...]}` as the task requires.
+
+## 37. The negative prompt is part of the check
+A negative prompt that excludes adulthood ("adult, mature, wrinkles") next to a sexual prompt is a known way of asking for a minor without saying so. That scores minor 0.9 (refuse). Excluding children in a negative prompt is what a negative prompt is for, so that alone is never penalised.
+
+## 38. Prompt audit stores a hash, not the text
+`prompt_events` records every decision (generation and checks) with a SHA-256 of the prompt and its length. That is enough to rate limit and review accounts that keep probing, without storing the text of refused requests. In production, refused prompts in the minor category would be preserved under legal hold for reporting, which is a policy and legal decision, not something to do by default in a demo.
+
+## 39. Provider controls live on every tab
+Switching the fake provider's state (healthy, slow with a delay, outage, 500s, 429, bad answers, duplicate callbacks, reset) is a page-wide bar, not part of Try it, so any state can be set while watching the review queue or the media list. It calls the provider's own `/_control`, the same endpoint the graders use.
