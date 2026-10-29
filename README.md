@@ -41,7 +41,7 @@ The page has a **fake provider bar on every tab**. It switches the provider to h
 - **Review queue**
 - **All media**, with readable reasons
 - **Try it**, which has:
-  - a prompt tester: prompt and negative-prompt fields, example cases for every band, score bars with the 0.5 and 0.8 thresholds, the rules that fired, and Generate with a choice of output scores
+  - a prompt tester: prompt and negative-prompt fields, example cases (every category, the incident case, each bypass trick, and allowed adult prompts), the nine true or false fields, the rules that fired (admins), and Generate with a choice of output scores
   - real file uploads
   - one-click synthetic test media
 
@@ -65,7 +65,7 @@ The API tests need a throwaway Postgres database and Redis. The harness migrates
 cd api
 uv sync
 TEST_DATABASE_URL=postgresql+asyncpg://moderation:moderation@localhost:5432/moderation_test \
-  SCREENING_MODE=fixed uv run pytest -v           # 186 tests
+  SCREENING_MODE=fixed uv run pytest -v           # 215 tests
 cd ../provider && uv sync && uv run pytest        # 6 tests
 cd ../provider_real && uv sync && uv run pytest   # 7 tests (stub model, no downloads)
 cd ../web && pnpm install && pnpm test            # 22 tests
@@ -90,7 +90,7 @@ uv run python ../scripts/crash_test.py --out ../docs/evidence/05-crash-test.json
 | `GET /review` | admins | held media of their own workspace; members `403` |
 | `POST /review/{id}/approve`, `/reject` | admins | `200`; members `403`; other workspace `404`; unscreened hold `409` |
 | `POST /provider/callback` | provider | `200`; missing or wrong HMAC-SHA256 signature `401` |
-| `POST /prompts/check`, `GET /prompts/events` | members (extra) | prompt scores and decision without generating; recent decisions of the workspace (no prompt text) |
+| `POST /prompts/check`, `GET /prompts/events` | members (extra) | the prompt fields and decision without generating (rule hits for admins only); recent decisions of the workspace (no prompt text) |
 
 Identity comes from `X-User-Id` and `X-Workspace-Id` (missing either is `401`).
 
@@ -123,27 +123,40 @@ Evidence against v0:
 
 | Symptom | What changed | Why | Test |
 | --- | --- | --- | --- |
-| Uploads went live unchecked | A timeout is never a pass. Timeouts and 5xx retry 3 times with exponential backoff and full jitter, 429 honours `Retry-After` with its own budget of 10, and a malformed answer gets 2 tries. Running out of budget means `held`. A Redis circuit breaker stops calls after 5 failures in 30 s and probes every 10 s. | Every unknown resolves toward "not live" | `test_provider_timeout_never_publishes`, `test_recovery.py` |
+| Uploads went live unchecked | A timeout is never a pass. Each failure type has its own limit: timeout 3 tries, 500 or no connection 4 (both with exponential backoff and full jitter), 429 5 (honouring `Retry-After`), malformed 2. Running out means `held`. A Redis circuit breaker stops calls after 5 failures in 30 s and probes every 10 s. | Every unknown resolves toward "not live" | `test_provider_timeout_never_publishes`, `test_recovery.py` |
 | Late explicit frame went live | Every frame goes to the provider, and an answer must cover frames 0 to n-1 exactly. Videos over 30 frames use the signed async callback. Migration 0002 also makes the database refuse `published` unless stored scores cover every frame. | Decision rows can lie; stored scores can't | `test_explicit_only_on_frame_55_of_60...`, `test_minor_only_on_last_frame...`, `test_db_refuses_published_when_decision_lies_about_coverage` |
-| Prompt for a 16-year-old reached the generator | A prompt engine scores every generation prompt before anything runs (details below). A refused prompt returns `422` and the generator and provider get zero calls. | Stop intent before spending anything | `test_refused_prompt_never_reaches_generator_or_provider`, `test_prompt_gate.py`, `test_prompt_scoring.py`, `test_prompt_engine.py` |
+| Prompt for a 16-year-old reached the generator | A prompt checker runs on every generation prompt before anything else (details below). A refused prompt returns `422` and the generator and provider get zero calls. | Stop intent before spending anything | `test_refused_prompt_never_reaches_generator_or_provider`, `test_prompt_gate.py`, `test_prompt_scoring.py`, `test_prompt_engine.py` |
 | Uploads scored 2 or 3 times | `FOR UPDATE SKIP LOCKED` claims with a lease and a fencing token. A `provider_calls` row is committed before every call. `scores` has its primary key on `media_id`, and callback receipts make a duplicate a no-op. | Score once, on purpose | `test_redelivered_job_calls_provider_once`, `test_duplicate_callback_is_a_no_op`, `test_stale_worker_write_is_fenced` |
 | "Nothing to review" while 40 waited | The review page has three distinct states: loading, an error with the HTTP status and a Retry button, and "Nothing to review" only after a successful empty response. Live counters show pending, held, oldest wait and provider state. | A failure must never look like an empty queue | `ReviewQueue.test.tsx` |
 
-**The prompt engine** (`api/app/screening/prompt_gate.py`) scores a generation prompt 0 to 1 on each prohibited category, plus incest and trafficking, on the same scale as media:
+**The decision** (`api/app/screening/policy.py`) checks every frame, and the first rule that matches wins:
 
-| Score | Decision | What happens |
+| # | If any frame has | Status |
 | --- | --- | --- |
-| any category 0.8 or more | refuse | `422 {"reasons": ["prompt:minor"]}`; nothing is generated or scored |
-| any category 0.5 to 0.8 | review | generated, but the output is held for a human (`review:prompt_minor`), even if it scores clean |
-| below 0.5 | allow | generated; the output is screened like any upload |
+| 1 | any prohibited label at 0.8 or more | blocked, in every workspace |
+| 2 | explicit at 0.8 or more, in an unverified workspace | blocked |
+| 3 | any prohibited label from 0.5 up to 0.8 | held for an admin |
+| 4 | nothing above | published (marked explicit if explicit is 0.8 or more) |
 
-How it scores:
-- **Normalising first** defeats spacing, digit and Unicode tricks ("t.e.e.n", "t33n", full-width letters).
-- **Weighted rules per category.** Strong terms score high on their own ("child", a stated age under 18, "rape"). Weak terms only count, or count more, with sexual context: "young" alone is 0.3, but "young" next to "nude" is 0.65 (review); "unconscious" next to "nude" is 0.9 (refuse).
-- **The negative prompt is checked too.** Excluding "adult" or "mature" from a sexual prompt is asking for a minor (0.9, refuse).
-- **`explicit` is scored for information only**, since adults are allowed.
-- **Every decision is recorded in `prompt_events`** with a SHA-256 of the prompt and its length, never the text. That's enough to spot an account that keeps probing.
-- **`POST /prompts/check`** scores a prompt without generating anything. The Try it tab uses it.
+Blocked beats held, and held beats published. 0.8 itself blocks and 0.5 itself holds. Explicit content alone never holds an item, so only rule 3 sends anything to a human.
+
+**The prompt checker** (`api/app/screening/prompt_gate.py`) returns the same shape a production model would:
+
+```
+under_18_or_looks_young, sexual_content, non_consent_or_sexual_violence, animal_sexual_content,
+self_harm, real_identifiable_person, incest, trafficking, tries_to_trick_the_checker   -> true / false
+```
+
+- **The decision:** refuse if any prohibited field is true, otherwise allow. There's no middle band: a prompt never sends its output to approval. The bias is towards refusing, because a false refusal is acceptable and a false pass is not.
+- **`sexual_content` alone is not a refusal.** Adult explicit content is judged at the output check, where it's published in a verified workspace and blocked in an unverified one.
+- **`tries_to_trick_the_checker` is recorded for account-level strikes.** Tricks that hide a prohibited request are refused anyway, because the request is found after normalising.
+- **A refusal is `422 {"reasons": ["prompt:minor"]}`.** It names the category, never the word. The generator and provider get zero calls.
+- **Normalising first:** Unicode NFKC, look-alike letters from other alphabets mapped to ASCII, zero-width characters removed, words split by spaces or dots joined, leetspeak mapped, stretched letters collapsed, and narrow misspellings caught ("chlid", "chld", but not "chili").
+- **Rules per category,** including ages under 18 in digits or words, age and school-stage words, and combinations: an age-coded word plus a sexual word is refused, and so is "unconscious" plus a sexual word. A field is true at strength 0.5 or more.
+- **The negative prompt is checked too.** Excluding "adult" or "mature" from a sexual prompt is asking for a minor.
+- **Every decision is recorded in `prompt_events`** with a SHA-256 of the prompt and its length, never the text.
+- **`POST /prompts/check`** returns the fields without generating anything. Workspace admins also see which rule fired; members never do.
+- **Known limit:** rules can still be beaten by indirect wording, euphemisms and other languages. Production keeps this rule floor and adds a decision model on top, refusing if either says no, failing closed if the model is down, and keeping the output frame check as the backstop.
 
 Recovery needs no human. Outage holds are released once the provider has answered again, at up to 50 items per 2 s, taking turns across workspaces. Before there's any sign of recovery, one item is released every 30 s as a probe. Approving an unscreened hold returns `409`, because that would publish something nobody checked.
 
@@ -161,20 +174,20 @@ Same seeded workload, both runs. v0 ran on the schema it was written for (migrat
 | &nbsp;&nbsp;published without a complete decision | 0 | 0 |
 | &nbsp;&nbsp;published although the full-frame policy says no | 30 | 0 |
 | Refused prompts accepted | 9 of 9 | 0 of 9 |
-| Provider calls per upload (target 1.0) | 1.034 | 1.021 |
-| Oldest waiting job, outage | 39.7 s | 22.0 s |
-| Oldest waiting job, recovery | 44.1 s | 24.3 s |
+| Provider calls per upload (target 1.0) | 1.034 | 1.022 |
+| Oldest waiting job, outage | 39.7 s | 21.8 s |
+| Oldest waiting job, recovery | 44.1 s | 22.6 s |
 | ws_unverified image to first outcome (held counts) p50 / p95, healthy | 0.09 s / 0.15 s | 0.08 s / 0.12 s |
-| ws_unverified image to first outcome (held counts) p50 / p95, outage | 27.63 s / 43.14 s | 20.54 s / 21.99 s |
-| ws_unverified image to first outcome (held counts) p50 / p95, recovery | 0.08 s / 7.55 s | 0.13 s / 11.05 s |
-| ws_unverified image to final decision p50 / p95, outage | 27.63 s / 43.14 s | 42.06 s / 50.64 s |
+| ws_unverified image to first outcome (held counts) p50 / p95, outage | 27.63 s / 43.14 s | 20.46 s / 21.31 s |
+| ws_unverified image to first outcome (held counts) p50 / p95, recovery | 0.08 s / 7.55 s | 0.13 s / 9.10 s |
+| ws_unverified image to final decision p50 / p95, outage | 27.63 s / 43.14 s | 41.43 s / 52.47 s |
 | Final status differs from the full-frame policy | 30 | 0 |
 
 How to read it:
-- **The burst does not stop the other workspace's images, during the outage or after it.** During the outage every `ws_unverified` image reached an outcome (held) at 20.5 s p50 and 22.0 s p95. That narrow spread is the 20 s hold rule doing its job, not images waiting behind the 200 videos (v0 spread from 27.6 s to 43.1 s). In the healthy and recovery phases images are decided in about 0.1 s at p50.
-- **Calls per upload 1.021.** All 723 screened items were scored successfully exactly once. The 15 extra calls are timeouts sent at the start of the outage, before the breaker opened.
-- **Time to final decision during the outage went up (42 s).** v0 was fast because it published images it never screened. The fix holds them and re-screens after recovery, so that number includes the outage itself.
-- **Recovery p95 of 11 s.** Images uploaded right after the provider comes back wait out the breaker's 10 s open period.
+- **The burst does not stop the other workspace's images, during the outage or after it.** During the outage every `ws_unverified` image reached an outcome (held) at 20.5 s p50 and 21.3 s p95. That narrow spread is the 20 s hold rule doing its job, not images waiting behind the 200 videos (v0 spread from 27.6 s to 43.1 s). In the healthy and recovery phases images are decided in about 0.1 s at p50.
+- **Calls per upload 1.022.** All 723 screened items were scored successfully exactly once. The extra calls are timeouts sent at the start of the outage, before the breaker opened.
+- **Time to final decision during the outage went up (41 s).** v0 was fast because it published images it never screened. The fix holds them and re-screens after recovery, so that number includes the outage itself.
+- **Recovery p95 of about 9 s.** Images uploaded right after the provider comes back wait out the breaker's 10 s open period.
 - **"Published without a complete decision" reads 0 for v0.** That's because v0's decision rows claimed every frame was covered. The row below it re-runs the policy over every frame and shows the real damage.
 
 ### Following one item through the logs

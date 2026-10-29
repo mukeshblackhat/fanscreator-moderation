@@ -1,6 +1,6 @@
 {
   "label": "after (fixed)",
-  "started_at": "2026-10-29T16:28:35.914825+00:00",
+  "started_at": "2026-10-29T17:44:57.887731+00:00",
   "scale": 1.0,
   "uploads_sent": 732,
   "uploads_accepted": 723,
@@ -10,48 +10,48 @@
   "published_without_full_scores_row": 0,
   "refused_prompts_sent": 9,
   "refused_prompts_accepted": 0,
-  "provider_calls_total": 738,
-  "provider_calls_per_upload": 1.021,
-  "ledger_calls_total": 738,
+  "provider_calls_total": 739,
+  "provider_calls_per_upload": 1.022,
+  "ledger_calls_total": 739,
   "oldest_waiting_job_age_s_max_by_phase": {
     "healthy": 0.0,
-    "outage": 22.0,
-    "recovery": 24.3,
+    "outage": 21.8,
+    "recovery": 22.6,
     "drain": 0.0
   },
   "image_latency_s": {
     "ws_unverified": {
       "healthy": {
         "n": 120,
-        "p50": 0.084,
-        "p95": 0.123
+        "p50": 0.082,
+        "p95": 0.116
       },
       "outage": {
         "n": 161,
-        "p50": 42.06,
-        "p95": 50.639
+        "p50": 41.432,
+        "p95": 52.466
       },
       "recovery": {
         "n": 239,
-        "p50": 0.128,
-        "p95": 11.048
+        "p50": 0.131,
+        "p95": 9.1
       }
     },
     "ws_verified": {
       "healthy": {
         "n": 1,
-        "p50": 0.142,
-        "p95": 0.142
+        "p50": 0.147,
+        "p95": 0.147
       },
       "outage": {
         "n": 1,
-        "p50": 57.299,
-        "p95": 57.299
+        "p50": 61.825,
+        "p95": 61.825
       },
       "recovery": {
         "n": 1,
-        "p50": 12.694,
-        "p95": 12.694
+        "p50": 12.329,
+        "p95": 12.329
       }
     }
   },
@@ -59,50 +59,50 @@
     "ws_unverified": {
       "healthy": {
         "n": 120,
-        "p50": 0.084,
-        "p95": 0.123
+        "p50": 0.082,
+        "p95": 0.116
       },
       "outage": {
         "n": 161,
-        "p50": 20.543,
-        "p95": 21.992
+        "p50": 20.461,
+        "p95": 21.311
       },
       "recovery": {
         "n": 239,
-        "p50": 0.128,
-        "p95": 11.048
+        "p50": 0.131,
+        "p95": 9.1
       }
     },
     "ws_verified": {
       "healthy": {
         "n": 1,
-        "p50": 0.142,
-        "p95": 0.142
+        "p50": 0.147,
+        "p95": 0.147
       },
       "outage": {
         "n": 1,
-        "p50": 21.642,
-        "p95": 21.642
+        "p50": 21.012,
+        "p95": 21.012
       },
       "recovery": {
         "n": 1,
-        "p50": 12.694,
-        "p95": 12.694
+        "p50": 12.329,
+        "p95": 12.329
       }
     }
   },
   "images_without_decision_by_phase": {},
   "final_status_counts": {
-    "published": 496,
-    "held": 91,
-    "blocked": 136
+    "published": 495,
+    "held": 80,
+    "blocked": 148
   },
   "final_vs_expected_mismatches": 0,
   "mismatch_breakdown": {},
   "expected_status_counts": {
-    "published": 496,
-    "held": 91,
-    "blocked": 136
+    "published": 495,
+    "held": 80,
+    "blocked": 148
   },
   "samples": [
     {
@@ -178,7 +178,7 @@
       "held": 6.0
     },
     {
-      "t": 9.0,
+      "t": 9.1,
       "phase": "healthy",
       "oldest_job_s": null,
       "oldest_pending_s": null,
@@ -186,7 +186,7 @@
       "held": 7.0
     },
     {
-      "t": 10.0,
+      "t": 10.1,
       "phase": "healthy",
       "oldest_job_s": null,
       "oldest_pending_s": null,
@@ -346,7 +346,7 @@
       "held": 15.0
     },
     {
-      "t": 30.1,
+      "t": 30.2,
       "phase": "outage",
       "oldest_job_s": null,
       "oldest_pending_s": null,
@@ -354,11 +354,11 @@
       "held": 15.0
     },
     {
-      "t": 31.1,
+      "t": 31.2,
       "phase": "outage",
       "oldest_job_s": 1.0,
       "oldest_pending_s": 1.0,
-      "pending": 110.0,
+      "pending": 123.0,
       "held": 15.0
     },
     {
@@ -404,72 +404,72 @@
     {
       "t": 37.2,
       "phase": "outage",
-      "oldest_job_s": 7.0,
-      "oldest_pending_s": 7.0,
+      "oldest_job_s": 7.1,
+      "oldest_pending_s": 7.1,
       "pending": 229.0,
       "held": 15.0
     },
     {
       "t": 38.2,
       "phase": "outage",
-      "oldest_job_s": 8.0,
-      "oldest_pending_s": 8.0,
+      "oldest_job_s": 8.1,
+      "oldest_pending_s": 8.1,
       "pending": 233.0,
       "held": 15.0
     },
     {
       "t": 39.2,
       "phase": "outage",
-      "oldest_job_s": 9.0,
-      "oldest_pending_s": 9.0,
+      "oldest_job_s": 9.1,
+      "oldest_pending_s": 9.1,
       "pending": 237.0,
       "held": 15.0
     },
     {
       "t": 40.2,
       "phase": "outage",
-      "oldest_job_s": 10.0,
-      "oldest_pending_s": 10.0,
+      "oldest_job_s": 10.1,
+      "oldest_pending_s": 10.1,
       "pending": 241.0,
       "held": 15.0
     },
     {
       "t": 41.2,
       "phase": "outage",
-      "oldest_job_s": 11.0,
-      "oldest_pending_s": 11.0,
+      "oldest_job_s": 11.1,
+      "oldest_pending_s": 11.1,
       "pending": 245.0,
       "held": 15.0
     },
     {
       "t": 42.2,
       "phase": "outage",
-      "oldest_job_s": 12.0,
-      "oldest_pending_s": 12.0,
+      "oldest_job_s": 12.1,
+      "oldest_pending_s": 12.1,
       "pending": 249.0,
       "held": 15.0
     },
     {
       "t": 43.2,
       "phase": "outage",
-      "oldest_job_s": 13.0,
-      "oldest_pending_s": 13.0,
+      "oldest_job_s": 13.1,
+      "oldest_pending_s": 13.1,
       "pending": 253.0,
       "held": 15.0
     },
     {
       "t": 44.2,
       "phase": "outage",
-      "oldest_job_s": 14.0,
-      "oldest_pending_s": 14.0,
+      "oldest_job_s": 14.1,
+      "oldest_pending_s": 14.1,
       "pending": 257.0,
       "held": 15.0
     },
     {
       "t": 45.2,
       "phase": "outage",
-      "oldest_job_s": 15.0,
-      "oldest_pending_s": 15.0,
+      "oldest_job_s": 15.1,
+      "oldest_pending_s": 15.1,
       "pending": 261.0,
       "held": 15.0
     },
@@ -516,37 +516,37 @@
     {
       "t": 51.2,
       "phase": "outage",
-      "oldest_job_s": 21.1,
+      "oldest_job_s": 20.9,
       "oldest_pending_s": 21.1,
-      "pending": 285.0,
-      "held": 15.0
+      "pending": 281.0,
+      "held": 19.0
     },
     {
-      "t": 52.2,
+      "t": 52.3,
+      "phase": "outage",
+      "oldest_job_s": 21.8,
+      "oldest_pending_s": 22.1,
+      "pending": 172.0,
+      "held": 132.0
+    },
+    {
+      "t": 53.3,
       "phase": "outage",
       "oldest_job_s": 21.6,
-      "oldest_pending_s": 21.6,
-      "pending": 224.0,
-      "held": 80.0
-    },
-    {
-      "t": 53.2,
-      "phase": "outage",
-      "oldest_job_s": 22.0,
       "oldest_pending_s": 23.1,
-      "pending": 113.0,
-      "held": 195.0
+      "pending": 87.0,
+      "held": 221.0
     },
     {
-      "t": 54.2,
+      "t": 54.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 24.1,
-      "pending": 83.0,
-      "held": 229.0
+      "pending": 82.0,
+      "held": 230.0
     },
     {
-      "t": 55.2,
+      "t": 55.3,
       "phase": "outage",
       "oldest_job_s": 20.3,
       "oldest_pending_s": 25.1,
@@ -556,114 +556,114 @@
     {
       "t": 56.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 26.1,
-      "pending": 83.0,
-      "held": 237.0
+      "pending": 82.0,
+      "held": 238.0
     },
     {
       "t": 57.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 27.1,
-      "pending": 83.0,
-      "held": 241.0
+      "pending": 82.0,
+      "held": 242.0
     },
     {
       "t": 58.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 28.1,
-      "pending": 83.0,
-      "held": 245.0
+      "pending": 82.0,
+      "held": 246.0
     },
     {
       "t": 59.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 29.1,
-      "pending": 83.0,
-      "held": 249.0
+      "pending": 82.0,
+      "held": 250.0
     },
     {
       "t": 60.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 30.1,
-      "pending": 83.0,
-      "held": 253.0
+      "pending": 82.0,
+      "held": 254.0
     },
     {
       "t": 61.3,
       "phase": "outage",
-      "oldest_job_s": 20.3,
+      "oldest_job_s": 20.6,
       "oldest_pending_s": 31.1,
-      "pending": 82.0,
-      "held": 258.0
+      "pending": 83.0,
+      "held": 257.0
     },
     {
       "t": 62.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 32.1,
-      "pending": 83.0,
-      "held": 261.0
+      "pending": 82.0,
+      "held": 262.0
     },
     {
       "t": 63.3,
       "phase": "outage",
-      "oldest_job_s": 20.8,
+      "oldest_job_s": 20.6,
       "oldest_pending_s": 33.1,
-      "pending": 84.0,
-      "held": 264.0
+      "pending": 83.0,
+      "held": 265.0
     },
     {
       "t": 64.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 34.1,
-      "pending": 83.0,
-      "held": 269.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 34.2,
+      "pending": 82.0,
+      "held": 270.0
     },
     {
       "t": 65.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 35.1,
-      "pending": 83.0,
-      "held": 273.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 35.2,
+      "pending": 82.0,
+      "held": 274.0
     },
     {
       "t": 66.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 36.1,
-      "pending": 83.0,
-      "held": 277.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 36.2,
+      "pending": 82.0,
+      "held": 278.0
     },
     {
       "t": 67.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 37.1,
-      "pending": 83.0,
-      "held": 281.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 37.2,
+      "pending": 82.0,
+      "held": 282.0
     },
     {
       "t": 68.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 38.1,
-      "pending": 83.0,
-      "held": 285.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 38.2,
+      "pending": 82.0,
+      "held": 286.0
     },
     {
       "t": 69.3,
       "phase": "outage",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 39.1,
-      "pending": 83.0,
-      "held": 289.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 39.2,
+      "pending": 82.0,
+      "held": 290.0
     },
     {
       "t": 70.3,
@@ -676,34 +676,34 @@
     {
       "t": 71.3,
       "phase": "recovery",
-      "oldest_job_s": 20.8,
-      "oldest_pending_s": 41.2,
-      "pending": 85.0,
-      "held": 296.0
+      "oldest_job_s": 20.5,
+      "oldest_pending_s": 20.5,
+      "pending": 83.0,
+      "held": 298.0
     },
     {
       "t": 72.3,
       "phase": "recovery",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 42.2,
-      "pending": 84.0,
-      "held": 301.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 20.3,
+      "pending": 82.0,
+      "held": 303.0
     },
     {
       "t": 73.3,
       "phase": "recovery",
       "oldest_job_s": 20.3,
-      "oldest_pending_s": 43.2,
-      "pending": 83.0,
-      "held": 306.0
+      "oldest_pending_s": 20.3,
+      "pending": 82.0,
+      "held": 307.0
     },
     {
       "t": 74.3,
       "phase": "recovery",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 20.5,
-      "pending": 83.0,
-      "held": 310.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 20.3,
+      "pending": 82.0,
+      "held": 311.0
     },
     {
       "t": 75.3,
@@ -716,10 +716,10 @@
     {
       "t": 76.3,
       "phase": "recovery",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 20.5,
-      "pending": 83.0,
-      "held": 318.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 20.3,
+      "pending": 82.0,
+      "held": 319.0
     },
     {
       "t": 77.3,
@@ -730,15 +730,15 @@
       "held": 322.0
     },
     {
-      "t": 78.3,
+      "t": 78.4,
       "phase": "recovery",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 20.5,
-      "pending": 83.0,
-      "held": 326.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 20.3,
+      "pending": 82.0,
+      "held": 327.0
     },
     {
-      "t": 79.3,
+      "t": 79.4,
       "phase": "recovery",
       "oldest_job_s": 20.3,
       "oldest_pending_s": 20.3,
@@ -748,170 +748,170 @@
     {
       "t": 80.4,
       "phase": "recovery",
-      "oldest_job_s": 20.5,
-      "oldest_pending_s": 20.5,
-      "pending": 83.0,
-      "held": 334.0
+      "oldest_job_s": 20.3,
+      "oldest_pending_s": 20.3,
+      "pending": 82.0,
+      "held": 335.0
     },
     {
       "t": 81.4,
       "phase": "recovery",
-      "oldest_job_s": 20.5,
+      "oldest_job_s": 20.3,
       "oldest_pending_s": 51.2,
-      "pending": 133.0,
-      "held": 288.0
+      "pending": 82.0,
+      "held": 338.0
     },
     {
       "t": 82.4,
       "phase": "recovery",
-      "oldest_job_s": 21.3,
-      "oldest_pending_s": 52.0,
-      "pending": 114.0,
-      "held": 292.0
+      "oldest_job_s": 20.5,
+      "oldest_pending_s": 52.2,
+      "pending": 56.0,
+      "held": 340.0
     },
     {
       "t": 83.4,
       "phase": "recovery",
-      "oldest_job_s": 22.0,
-      "oldest_pending_s": 52.9,
-      "pending": 191.0,
-      "held": 194.0
+      "oldest_job_s": 21.1,
+      "oldest_pending_s": 53.2,
+      "pending": 131.0,
+      "held": 242.0
     },
     {
       "t": 84.4,
       "phase": "recovery",
-      "oldest_job_s": 22.5,
-      "oldest_pending_s": 53.9,
-      "pending": 169.0,
-      "held": 196.0
+      "oldest_job_s": 21.8,
+      "oldest_pending_s": 54.2,
+      "pending": 105.0,
+      "held": 247.0
     },
     {
       "t": 85.4,
       "phase": "recovery",
-      "oldest_job_s": 23.3,
-      "oldest_pending_s": 54.8,
-      "pending": 146.0,
-      "held": 198.0
+      "oldest_job_s": 22.6,
+      "oldest_pending_s": 55.2,
+      "pending": 179.0,
+      "held": 149.0
     },
     {
       "t": 86.4,
       "phase": "recovery",
-      "oldest_job_s": 24.3,
-      "oldest_pending_s": 55.8,
-      "pending": 225.0,
-      "held": 103.0
+      "oldest_job_s": 5.4,
+      "oldest_pending_s": 56.2,
+      "pending": 160.0,
+      "held": 152.0
     },
     {
       "t": 87.4,
       "phase": "recovery",
-      "oldest_job_s": 18.5,
-      "oldest_pending_s": 56.7,
-      "pending": 199.0,
-      "held": 105.0
+      "oldest_job_s": 4.3,
+      "oldest_pending_s": 56.9,
+      "pending": 238.0,
+      "held": 55.0
     },
     {
       "t": 88.4,
       "phase": "recovery",
       "oldest_job_s": 5.3,
-      "oldest_pending_s": 57.7,
-      "pending": 244.0,
-      "held": 38.0
+      "oldest_pending_s": 57.9,
+      "pending": 216.0,
+      "held": 59.0
     },
     {
       "t": 89.4,
       "phase": "recovery",
-      "oldest_job_s": 6.1,
-      "oldest_pending_s": 58.7,
-      "pending": 220.0,
-      "held": 42.0
+      "oldest_job_s": 4.3,
+      "oldest_pending_s": 58.6,
+      "pending": 217.0,
+      "held": 39.0
     },
     {
       "t": 90.4,
       "phase": "recovery",
-      "oldest_job_s": 7.1,
-      "oldest_pending_s": 59.7,
-      "pending": 198.0,
-      "held": 47.0
+      "oldest_job_s": 5.3,
+      "oldest_pending_s": 59.6,
+      "pending": 194.0,
+      "held": 40.0
     },
     {
       "t": 91.4,
       "phase": "recovery",
-      "oldest_job_s": 8.1,
+      "oldest_job_s": 6.3,
       "oldest_pending_s": 60.5,
-      "pending": 180.0,
-      "held": 51.0
+      "pending": 174.0,
+      "held": 41.0
     },
     {
       "t": 92.4,
       "phase": "recovery",
-      "oldest_job_s": 7.0,
-      "oldest_pending_s": 61.4,
-      "pending": 158.0,
-      "held": 55.0
+      "oldest_job_s": 7.1,
+      "oldest_pending_s": 61.5,
+      "pending": 155.0,
+      "held": 42.0
     },
     {
       "t": 93.4,
       "phase": "recovery",
-      "oldest_job_s": 8.0,
-      "oldest_pending_s": 62.3,
-      "pending": 138.0,
-      "held": 55.0
+      "oldest_job_s": 8.1,
+      "oldest_pending_s": 62.5,
+      "pending": 135.0,
+      "held": 43.0
     },
     {
       "t": 94.4,
       "phase": "recovery",
-      "oldest_job_s": 8.9,
+      "oldest_job_s": 7.3,
       "oldest_pending_s": 63.3,
-      "pending": 121.0,
-      "held": 55.0
+      "pending": 114.0,
+      "held": 47.0
     },
     {
       "t": 95.4,
       "phase": "recovery",
-      "oldest_job_s": 9.9,
-      "oldest_pending_s": 64.2,
-      "pending": 102.0,
-      "held": 59.0
+      "oldest_job_s": 8.3,
+      "oldest_pending_s": 64.4,
+      "pending": 92.0,
+      "held": 52.0
     },
     {
       "t": 96.4,
       "phase": "recovery",
-      "oldest_job_s": 10.9,
+      "oldest_job_s": 9.1,
       "oldest_pending_s": 65.2,
-      "pending": 81.0,
-      "held": 61.0
+      "pending": 72.0,
+      "held": 54.0
     },
     {
       "t": 97.4,
       "phase": "recovery",
-      "oldest_job_s": 9.9,
+      "oldest_job_s": 10.1,
       "oldest_pending_s": 66.2,
-      "pending": 71.0,
-      "held": 61.0
+      "pending": 56.0,
+      "held": 56.0
     },
     {
       "t": 98.4,
       "phase": "recovery",
-      "oldest_job_s": 10.9,
-      "oldest_pending_s": 67.1,
-      "pending": 47.0,
-      "held": 62.0
+      "oldest_job_s": 11.1,
+      "oldest_pending_s": 67.2,
+      "pending": 43.0,
+      "held": 57.0
     },
     {
       "t": 99.4,
       "phase": "recovery",
-      "oldest_job_s": 11.9,
-      "oldest_pending_s": 68.0,
-      "pending": 29.0,
-      "held": 63.0
+      "oldest_job_s": 12.1,
+      "oldest_pending_s": 68.2,
+      "pending": 35.0,
+      "held": 57.0
     },
     {
       "t": 100.4,
       "phase": "recovery",
-      "oldest_job_s": 12.7,
-      "oldest_pending_s": 69.0,
-      "pending": 13.0,
-      "held": 67.0
+      "oldest_job_s": 11.3,
+      "oldest_pending_s": 69.1,
+      "pending": 9.0,
+      "held": 60.0
     },
     {
       "t": 101.4,
@@ -919,7 +919,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 67.0
+      "held": 61.0
     },
     {
       "t": 102.4,
@@ -927,7 +927,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 68.0
+      "held": 61.0
     },
     {
       "t": 103.4,
@@ -935,31 +935,31 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 69.0
+      "held": 61.0
     },
     {
-      "t": 104.4,
+      "t": 104.5,
       "phase": "recovery",
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 70.0
+      "held": 62.0
     },
     {
-      "t": 105.4,
+      "t": 105.5,
       "phase": "recovery",
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 71.0
+      "held": 62.0
     },
     {
-      "t": 106.4,
+      "t": 106.5,
       "phase": "recovery",
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 71.0
+      "held": 64.0
     },
     {
       "t": 107.5,
@@ -967,7 +967,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 71.0
+      "held": 64.0
     },
     {
       "t": 108.5,
@@ -975,7 +975,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 73.0
+      "held": 65.0
     },
     {
       "t": 109.5,
@@ -983,7 +983,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 74.0
+      "held": 66.0
     },
     {
       "t": 110.5,
@@ -991,7 +991,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 74.0
+      "held": 67.0
     },
     {
       "t": 111.5,
@@ -999,7 +999,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 74.0
+      "held": 67.0
     },
     {
       "t": 112.5,
@@ -1007,7 +1007,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 75.0
+      "held": 69.0
     },
     {
       "t": 113.5,
@@ -1015,7 +1015,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 76.0
+      "held": 69.0
     },
     {
       "t": 114.5,
@@ -1023,7 +1023,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 77.0
+      "held": 69.0
     },
     {
       "t": 115.5,
@@ -1031,7 +1031,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 78.0
+      "held": 69.0
     },
     {
       "t": 116.5,
@@ -1039,7 +1039,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 79.0
+      "held": 70.0
     },
     {
       "t": 117.5,
@@ -1047,7 +1047,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 80.0
+      "held": 71.0
     },
     {
       "t": 118.5,
@@ -1055,7 +1055,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 81.0
+      "held": 73.0
     },
     {
       "t": 119.5,
@@ -1063,7 +1063,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 81.0
+      "held": 73.0
     },
     {
       "t": 120.5,
@@ -1071,7 +1071,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 82.0
+      "held": 73.0
     },
     {
       "t": 121.5,
@@ -1079,7 +1079,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 84.0
+      "held": 74.0
     },
     {
       "t": 122.5,
@@ -1087,7 +1087,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 85.0
+      "held": 74.0
     },
     {
       "t": 123.5,
@@ -1095,7 +1095,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 85.0
+      "held": 74.0
     },
     {
       "t": 124.5,
@@ -1103,7 +1103,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 86.0
+      "held": 75.0
     },
     {
       "t": 125.5,
@@ -1111,15 +1111,15 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 87.0
+      "held": 75.0
     },
     {
       "t": 126.5,
       "phase": "recovery",
-      "oldest_job_s": 0.1,
-      "oldest_pending_s": 0.1,
-      "pending": 1.0,
-      "held": 87.0
+      "oldest_job_s": null,
+      "oldest_pending_s": null,
+      "pending": 0.0,
+      "held": 76.0
     },
     {
       "t": 127.5,
@@ -1127,7 +1127,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 88.0
+      "held": 78.0
     },
     {
       "t": 128.5,
@@ -1135,7 +1135,7 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 90.0
+      "held": 79.0
     },
     {
       "t": 129.5,
@@ -1143,23 +1143,23 @@
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 91.0
+      "held": 80.0
     },
     {
-      "t": 130.5,
-      "phase": "recovery",
-      "oldest_job_s": null,
-      "oldest_pending_s": null,
-      "pending": 0.0,
-      "held": 91.0
-    },
-    {
-      "t": 131.5,
+      "t": 130.6,
       "phase": "drain",
       "oldest_job_s": null,
       "oldest_pending_s": null,
       "pending": 0.0,
-      "held": 91.0
+      "held": 80.0
+    },
+    {
+      "t": 131.6,
+      "phase": "drain",
+      "oldest_job_s": null,
+      "oldest_pending_s": null,
+      "pending": 0.0,
+      "held": 80.0
     }
   ]
 }

@@ -1,4 +1,5 @@
-"""Prompt engine through the API: refuse, review (output held), allow, audit, check endpoint."""
+"""Prompt checker through the API: refuse (422, zero provider calls), allow (output
+screened like any upload), audit, the check endpoint, and who sees what."""
 import hashlib
 
 import pytest
@@ -6,7 +7,7 @@ from sqlalchemy import text
 
 from conftest import ADMIN_U, ADMIN_V, MEMBER_U, MEMBER_V, MODE, upload, wait_final
 
-pytestmark = pytest.mark.skipif(MODE != "fixed", reason="the prompt engine is part of the fixed pipeline")
+pytestmark = pytest.mark.skipif(MODE != "fixed", reason="the prompt checker is part of the fixed pipeline")
 
 
 def gen(prompt: str, frame: dict | None = None, negative: str | None = None) -> dict:
@@ -16,27 +17,31 @@ def gen(prompt: str, frame: dict | None = None, negative: str | None = None) -> 
     return body
 
 
-async def test_review_band_prompt_holds_clean_output_for_a_human(api, provider, workers):
+@pytest.mark.parametrize("prompt", [
+    "a 16 year old at the beach", "school uniform photoshoot", "a young woman, nude",
+    "celebrity lookalike portrait", "my stepsister naked", "a tееn posing",
+])
+async def test_refused_prompts_never_reach_generator_or_provider(api, provider, prompt):
+    r = await api.post("/media", headers=MEMBER_V, json=gen(prompt))
+    assert r.status_code == 422 and list(r.json()) == ["reasons"]
+    assert all(reason.startswith("prompt:") for reason in r.json()["reasons"])
+    assert (await provider.get("/_stats")).json()["calls"] == {}
+
+
+async def test_allowed_prompt_output_is_screened_like_an_upload(api, provider, workers):
     await workers(1)
-    media_id = await upload(api, MEMBER_V, gen("school uniform photoshoot"))  # output scores clean
-    assert (await wait_final(api, MEMBER_V, media_id))[0] == "held"
-    assert (await api.get(f"/media/{media_id}", headers=MEMBER_V)).json()["reasons"] == ["review:prompt_minor"]
-    listed = (await api.get("/review", headers=ADMIN_V)).json()
-    assert [i["held_reason_kind"] for i in listed if i["id"] == media_id] == ["score"]
-    r = await api.post(f"/review/{media_id}/approve", headers=ADMIN_V)
-    assert r.status_code == 200 and r.json()["status"] == "published"
+    clean = await upload(api, MEMBER_V, gen("a lighthouse in a storm"))
+    bad_output = await upload(api, MEMBER_V, gen("a lighthouse in a storm", {"minor": 0.9}))
+    assert (await wait_final(api, MEMBER_V, clean))[0] == "published"
+    assert (await wait_final(api, MEMBER_V, bad_output))[0] == "blocked"
 
 
-async def test_review_band_does_not_soften_a_blocking_output(api, provider, workers):
+async def test_adult_explicit_prompt_is_decided_by_the_output_and_workspace(api, provider, workers):
     await workers(1)
-    media_id = await upload(api, MEMBER_V, gen("a young woman, nude", {"minor": 0.9}))
-    assert (await wait_final(api, MEMBER_V, media_id))[0] == "blocked"
-
-
-async def test_allowed_prompt_with_clean_output_is_published(api, provider, workers):
-    await workers(1)
-    media_id = await upload(api, MEMBER_V, gen("a lighthouse in a storm"))
-    assert (await wait_final(api, MEMBER_V, media_id))[0] == "published"
+    verified = await upload(api, MEMBER_V, gen("two adults, explicit", {"explicit": 0.95}))
+    unverified = await upload(api, MEMBER_U, gen("two adults, explicit", {"explicit": 0.95}))
+    assert (await wait_final(api, MEMBER_V, verified))[0] == "published"
+    assert (await wait_final(api, MEMBER_U, unverified))[0] == "blocked"
 
 
 async def test_negative_prompt_excluding_adults_is_refused(client):
@@ -55,8 +60,8 @@ async def test_every_decision_is_audited_without_the_prompt_text(client, db):
     assert refused.status_code == 422 and allowed.status_code == 202
     assert generator.total_calls() == before + 1  # only the allowed one reached the generator
     rows = (await db.execute(text(
-        "SELECT decision, kind, prompt_sha256, prompt_chars, media_id IS NOT NULL AS has_media "
-        "FROM prompt_events ORDER BY id"))).mappings().all()
+        "SELECT decision, kind, prompt_sha256, media_id IS NOT NULL AS has_media FROM prompt_events ORDER BY id"
+    ))).mappings().all()
     await db.commit()
     assert [(r["decision"], r["kind"], r["has_media"]) for r in rows] == [
         ("refuse", "generation", False), ("allow", "generation", True)]
@@ -67,22 +72,27 @@ async def test_every_decision_is_audited_without_the_prompt_text(client, db):
     assert "prompt" not in columns and "prompt_text" not in columns
 
 
-async def test_prompt_scores_are_stored_with_generated_media(client, db):
-    media_id = (await client.post("/media", headers=MEMBER_V, json=gen("celebrity lookalike portrait"))).json()["id"]
-    row = (await db.execute(text("SELECT prompt_scores, prompt_flags FROM media WHERE id = :m"),
+async def test_media_records_its_creator_and_prompt_fields(client, db):
+    media_id = (await client.post("/media", headers=MEMBER_V, json=gen("a lighthouse"))).json()["id"]
+    row = (await db.execute(text("SELECT created_by, prompt_scores FROM media WHERE id = :m"),
                             {"m": media_id})).mappings().one()
     await db.commit()
-    assert row["prompt_scores"]["real_person"] == 0.55
-    assert row["prompt_flags"] == ["review:prompt_real_person"]
+    assert row["created_by"] == "member_v"
+    assert row["prompt_scores"]["fields"]["under_18_or_looks_young"] is False
 
 
-async def test_check_endpoint(client):
-    r = await client.post("/prompts/check", headers=MEMBER_U, json={"prompt": "barely legal girl in lingerie"})
-    body = r.json()
-    assert r.status_code == 200 and body["decision"] == "refuse" and body["reasons"] == ["prompt:minor"]
-    assert body["scores"]["minor"] == 0.85 and body["thresholds"] == {"refuse": 0.8, "review": 0.5}
-    assert body["hits"]["minor"]
-    assert (await client.post("/prompts/check", headers=MEMBER_U, json={"prompt": "a cabin"})).json()["decision"] == "allow"
+async def test_check_endpoint_returns_the_interface(client):
+    body = (await client.post("/prompts/check", headers=ADMIN_U, json={"prompt": "barely legal girl in lingerie"})).json()
+    assert body["decision"] == "refuse" and body["reasons"] == ["prompt:minor"]
+    assert body["fields"]["under_18_or_looks_young"] is True and body["fields"]["sexual_content"] is True
+    assert body["field_threshold"] == 0.5 and body["hits"]["minor"]
+    allowed = (await client.post("/prompts/check", headers=ADMIN_U, json={"prompt": "a cabin"})).json()
+    assert allowed["decision"] == "allow" and not any(allowed["fields"].values())
+
+
+async def test_members_never_see_which_word_triggered_it(client):
+    body = (await client.post("/prompts/check", headers=MEMBER_U, json={"prompt": "barely legal girl"})).json()
+    assert body["decision"] == "refuse" and "hits" not in body
 
 
 async def test_check_endpoint_needs_a_member(client):

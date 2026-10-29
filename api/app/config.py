@@ -31,8 +31,10 @@ class Settings(BaseSettings):
     rescreen_concurrency: int = 2
 
     # Retry budgets (counted per job from the provider_calls ledger)
-    max_failure_attempts: int = 3      # timeouts and 5xx
-    max_rate_limited_attempts: int = 10
+    # Retry budgets per failure type (counted per job from the provider_calls ledger)
+    max_timeout_attempts: int = 3
+    max_server_error_attempts: int = 4   # 5xx and no connection
+    max_rate_limited_attempts: int = 5
     max_malformed_attempts: int = 2
     backoff_base_seconds: float = 0.5
     backoff_cap_seconds: float = 10.0

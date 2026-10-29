@@ -125,10 +125,10 @@ async def upload_media(
     async with session.begin():
         await session.execute(text(
             """
-            INSERT INTO media (id, workspace_id, type, source, frame_count, frames)
-            VALUES (:id, :ws, :type, 'upload', :n, CAST(:frames AS jsonb))
+            INSERT INTO media (id, workspace_id, created_by, type, source, frame_count, frames)
+            VALUES (:id, :ws, :by, :type, 'upload', :n, CAST(:frames AS jsonb))
             """
-        ), {"id": media_id, "ws": caller.workspace_id, "type": media_type, "n": count,
+        ), {"id": media_id, "ws": caller.workspace_id, "by": caller.user_id, "type": media_type, "n": count,
             "frames": json.dumps(frames)})
         await session.execute(text(
             "INSERT INTO jobs (media_id, workspace_id, lane) VALUES (:m, :ws, :lane)"

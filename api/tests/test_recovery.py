@@ -50,13 +50,13 @@ async def test_timeout_retries_three_times_then_holds(api, provider, db, workers
     assert await provider_calls(provider, media_id) == 3  # the provider saw (and may bill) all three
 
 
-async def test_5xx_retries_three_times_then_holds(api, provider, db, workers, quick):
+async def test_5xx_retries_four_times_then_holds(api, provider, db, workers, quick):
     await provider.post("/_control", json={"mode": "error"})
     await workers(1)
     media_id = await upload(api, ADMIN_U, image())
     assert (await wait_final(api, ADMIN_U, media_id))[0] == "held"
-    assert await ledger(db, media_id) == {"server_error": 3}
-    assert await provider_calls(provider, media_id) == 3
+    assert await ledger(db, media_id) == {"server_error": 4}
+    assert await provider_calls(provider, media_id) == 4
 
 
 async def test_429_waits_for_retry_after_without_holding(api, provider, db, workers, quick):
@@ -72,6 +72,17 @@ async def test_429_waits_for_retry_after_without_holding(api, provider, db, work
     calls = await ledger(db, media_id)
     assert calls["ok"] == 1 and set(calls) <= {"rate_limited", "ok"}
     assert await provider_calls(provider, media_id) == sum(calls.values())
+
+
+async def test_429_budget_is_five_then_holds(api, provider, db, workers, quick, monkeypatch):
+    monkeypatch.setattr(quick, "hold_after_seconds", 60)  # let the 429 budget, not the outage timer, decide
+    await provider.post("/_control", json={"mode": "rate_limit"})
+    await workers(1)
+    media_id = await upload(api, ADMIN_V, image())
+    final, seen = await wait_final(api, ADMIN_V, media_id, timeout=30)
+    assert final == "held" and "published" not in seen
+    assert await held_kind(api, ADMIN_V, media_id) == "screening_unavailable"
+    assert await ledger(db, media_id) == {"rate_limited": 5}
 
 
 async def test_malformed_answer_is_never_trusted(api, provider, db, workers, quick):
@@ -93,7 +104,7 @@ async def test_breaker_stops_calls_during_an_outage(api, provider, db, workers, 
     finals = [(await wait_final(api, ADMIN_U, m))[0] for m in ids]
     assert finals == ["held"] * 8
     total = sum((await provider.get("/_stats")).json()["calls"].values())
-    assert total < 8 * 3, f"breaker should have stopped calls, provider saw {total}"
+    assert total < 8 * 4, f"breaker should have stopped calls, provider saw {total}"
     kinds = {await held_kind(api, ADMIN_U, m) for m in ids}
     assert kinds == {"screening_unavailable"}
 

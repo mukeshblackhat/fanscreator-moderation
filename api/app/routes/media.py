@@ -37,8 +37,9 @@ async def create_media(
         assert body.prompt is not None  # enforced by MediaIn
         if settings.screening_mode == "fixed":
             assessment = prompt_gate.assess(body.prompt, body.negative_prompt)
-            log.info("prompt_assessed", workspace_id=caller.workspace_id, decision=assessment.decision,
-                     reasons=assessment.reasons, top=max(assessment.scores.items(), key=lambda kv: kv[1]))
+            log.info("prompt_assessed", workspace_id=caller.workspace_id, user_id=caller.user_id,
+                     decision=assessment.decision, reasons=assessment.reasons,
+                     tries_to_trick=assessment.fields["tries_to_trick_the_checker"])
             if assessment.decision == "refuse":
                 async with session.begin():
                     await prompt_audit.record(session, workspace_id=caller.workspace_id, user_id=caller.user_id,
@@ -53,15 +54,13 @@ async def create_media(
     async with session.begin():
         await session.execute(text(
             """
-            INSERT INTO media (id, workspace_id, type, source, prompt, negative_prompt, frame_count, frames,
-                               prompt_scores, prompt_flags)
-            VALUES (:id, :ws, :type, :source, :prompt, :neg, :n, CAST(:frames AS jsonb),
-                    CAST(:pscores AS jsonb), CAST(:pflags AS jsonb))
+            INSERT INTO media (id, workspace_id, created_by, type, source, prompt, negative_prompt, frame_count,
+                               frames, prompt_scores)
+            VALUES (:id, :ws, :by, :type, :source, :prompt, :neg, :n, CAST(:frames AS jsonb), CAST(:pscores AS jsonb))
             """
-        ), {"id": media_id, "ws": caller.workspace_id, "type": body.type, "source": body.source,
+        ), {"id": media_id, "ws": caller.workspace_id, "by": caller.user_id, "type": body.type, "source": body.source,
             "prompt": body.prompt, "neg": body.negative_prompt, "n": len(frames), "frames": json.dumps(frames),
-            "pscores": json.dumps(assessment.scores) if assessment else None,
-            "pflags": json.dumps(assessment.reasons if assessment and assessment.decision == "review" else [])})
+            "pscores": json.dumps({"scores": assessment.scores, "fields": assessment.fields}) if assessment else None})
         if assessment:
             await prompt_audit.record(session, workspace_id=caller.workspace_id, user_id=caller.user_id,
                                       kind="generation", prompt=body.prompt, negative_prompt=body.negative_prompt,
@@ -84,7 +83,7 @@ async def list_media(
     review page; the graded routes above are unchanged."""
     rows = (await session.execute(text(
         """
-        SELECT id, status, reasons, type, source, prompt, negative_prompt, prompt_scores, prompt_flags,
+        SELECT id, status, reasons, type, source, prompt, negative_prompt, prompt_scores, created_by,
                frame_count, is_explicit,
                held_reason_kind, created_at, updated_at,
                (frames -> 0 ->> 'image') IS NOT NULL AS has_images

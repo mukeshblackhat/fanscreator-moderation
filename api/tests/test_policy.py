@@ -47,9 +47,21 @@ def test_hold_on_frame_3_and_block_on_frame_50_is_blocked():
     assert d.status == "blocked" and d.reasons == ["prohibited:bestiality@frame=50"]
 
 
-def test_hold_beats_explicit_block_in_unverified():
+def test_explicit_block_beats_hold_in_unverified():
+    """Rule order from the brief notes: blocked beats held. Explicit in an
+    unverified workspace blocks, even if another label would only hold."""
     d = decide([{"explicit": 0.9, "minor": 0.6}], verified=False)
-    assert d.status == "held" and d.reasons == ["review:minor@frame=0"]
+    assert d.status == "blocked" and d.reasons == ["explicit_unverified"]
+
+
+def test_same_item_in_a_verified_workspace_is_held_not_published():
+    d = decide([{"explicit": 0.9, "minor": 0.6}], verified=True)
+    assert d.status == "held" and d.reasons == ["review:minor@frame=0"] and d.is_explicit
+
+
+def test_explicit_alone_never_holds():
+    assert decide([{"explicit": 0.99}], verified=True).status == "published"
+    assert decide([{"explicit": 0.99}], verified=False).status == "blocked"
 
 
 def test_every_frame_counts_not_a_prefix():

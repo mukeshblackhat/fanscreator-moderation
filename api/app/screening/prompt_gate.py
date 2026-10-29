@@ -1,44 +1,52 @@
-"""Generation prompt engine: score a prompt before anything is generated.
+"""Generation prompt checker: refuse or allow, before anything is generated.
 
-assess(prompt) -> PromptAssessment with a 0..1 score per category, the rule
-hits behind each score, and a decision on the same scale as media:
+Follows the brief's rules and our notes (docs/decisions.md #36):
 
-  any category >= 0.8   refuse   422 before the generator or provider is called
-  any category >= 0.5   review   generate, but hold the output for a human
-                                 (reason "review:prompt_<category>"), even if
-                                 the output itself scores clean
-  otherwise             allow    generate; the output is screened as usual
+* Refuse a prompt that asks for any of: minor (anyone under 18 or who appears
+  to be), sexual violence or sex without consent, bestiality, self-harm, a real
+  identifiable person, incest, trafficking. In every workspace, verified or not.
+* Refusal happens before anything is generated or scored: 422 {"reasons"} with
+  the category only, never the word that triggered it.
+* Adult or explicit prompts are NOT refused. Explicit content is handled at the
+  output check, based on whether the workspace is verified.
+* There is no middle "review" band. A prompt is refused or allowed, with a bias
+  towards refusing: a false refusal is acceptable, a false pass is not. Every
+  generated output is still screened like an upload (the final backstop).
 
-Categories: minor, sexual_violence, bestiality, self_harm, real_person,
-incest, trafficking. `explicit` is also scored, for information only:
-explicit prompts are allowed (verified workspaces may publish explicit
-output; unverified ones block it at the output check).
+Interface (the same shape a production model would return):
 
-Steps:
-1. Normalise: Unicode NFKC, lowercase, strip zero-width characters, collapse
-   words split by spaces or punctuation ("t.e.e.n", "t e e n"), map common
-   digit/symbol substitutions ("t33n" -> "teen"), collapse long repeats.
-2. Weighted rules per category. A rule is a set of terms and a weight. Some
-   terms only count, or count more, when the prompt also has sexual context
-   ("young" alone 0.3, "young" + "nude" 0.65; "unconscious" + sexual 0.9).
-   A category's score is the highest weight among its rules that matched.
+    under_18_or_looks_young, sexual_content, non_consent_or_sexual_violence,
+    animal_sexual_content, self_harm, real_identifiable_person, incest,
+    trafficking, tries_to_trick_the_checker      -> bool each
 
-check(prompt) keeps the old contract: the "prompt:<category>" reasons of the
-refuse band (an empty list means the prompt may be generated).
+Decision: refuse if any prohibited field is true. `sexual_content` alone is not
+a refusal. `tries_to_trick_the_checker` is recorded for account-level strikes;
+on its own it does not refuse (tricks that hide a prohibited request are
+refused because the request is found after normalising).
 
-Rules alone are weak: they miss paraphrase, other languages and new slang,
-and they over-block innocent text. In production this module would call a
-safety classifier (for example Llama Guard 4 with our own category
-definitions) after the rules, and also check negative prompts, reference
-images and LoRAs. The output is screened anyway. Keeping the logic behind
-one function means the classifier can be swapped in without touching routes.
+How fields are set:
+1. Normalise: Unicode NFKC, look-alike letters mapped to ASCII (Cyrillic
+   "е" -> "e", via unidecode), zero-width characters removed, words split by
+   spaces or dots joined ("t.e.e.n"), leetspeak mapped ("t33n"), long repeats
+   collapsed, and narrow misspellings caught (letters swapped or one dropped:
+   "chlid", "chld"), for words of 5+ letters.
+2. Weighted rules give each category a strength from 0 to 1 (strong terms
+   alone; weak terms with sexual context: "young" alone 0.3, "young" + "nude"
+   0.65). A field is true at 0.5 or more. The strengths are kept for the
+   tester and the audit; the decision only uses the fields.
 
-Term lists are kept deliberately short and synthetic.
+Known limits: rules miss indirect wording and euphemisms, and other
+languages. Production keeps this rule floor and adds a decision model on top
+(refuse if either says no), fails closed if that model is down, and keeps the
+output frame check as the backstop.
 """
 import re
 import unicodedata
+from dataclasses import dataclass, field
 
-ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍⁠﻿­"), None)
+from unidecode import unidecode
+
+ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad"), None)
 LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s", "!": "i"})
 
 NUMBER_WORDS = {
@@ -48,19 +56,22 @@ NUMBER_WORDS = {
 }
 
 AGE_PATTERNS = [
-    # "16 year old", "16-year-old", "16yo", "16 y/o", "16 yrs", "16 years"
     re.compile(r"\b(\d{1,2})\s*(?:years?|yrs?|yo|y/o|y\.o\.?)(?:\s*old)?\b"),
-    # "age 15", "aged 15", "age: 15"
     re.compile(r"\bage[ds]?\s*:?\s*(\d{1,2})\b"),
-    # "sixteen year old", "sixteen yo"
     re.compile(r"\b(" + "|".join(NUMBER_WORDS) + r")\s*(?:years?|yrs?|yo)(?:\s*old)?\b"),
 ]
 
-from dataclasses import dataclass, field
-
-REFUSE_AT = 0.8
-REVIEW_AT = 0.5
+FIELD_AT = 0.5  # a category's field is true at this strength or more
 CATEGORIES = ("minor", "sexual_violence", "bestiality", "self_harm", "real_person", "incest", "trafficking")
+FIELD_NAMES = {
+    "minor": "under_18_or_looks_young",
+    "sexual_violence": "non_consent_or_sexual_violence",
+    "bestiality": "animal_sexual_content",
+    "self_harm": "self_harm",
+    "real_person": "real_identifiable_person",
+    "incest": "incest",
+    "trafficking": "trafficking",
+}
 
 # Sexual context. Some weak terms only matter next to these.
 SEXUAL = ["nude", "naked", "sex", "sexy", "sexual", "explicit", "nsfw", "porn", "porno", "lingerie",
@@ -139,19 +150,24 @@ _RULE_RE = {cat: [(rule, _pattern(rule.terms)) for rule in rules] for cat, rules
 _SEXUAL_RE = _pattern(SEXUAL)
 _EXPLICIT_STRONG_RE = _pattern(EXPLICIT_STRONG)
 _EXPLICIT_SOFT_RE = _pattern(EXPLICIT_SOFT)
-_SPLIT_LETTERS = re.compile(r"\b(?:[a-z0-9][\s._\-*]+){2,}[a-z0-9]\b")
+
+
+# A negative prompt that excludes adulthood next to a sexual prompt is asking for a minor.
+_ADULT_EXCLUSION_RE = _pattern(("adult", "adults", "mature", "grown up", "grownup", "old", "older", "aged",
+                                "wrinkles", "milf", "woman", "women", "man", "men"))
+
 
 
 @dataclass
 class PromptAssessment:
-    decision: str                                   # "refuse" | "review" | "allow"
-    scores: dict[str, float]                        # every category plus "explicit"
-    hits: dict[str, list[str]] = field(default_factory=dict)
-    reasons: list[str] = field(default_factory=list)  # prompt:<cat> (refuse) or review:prompt_<cat> (review)
+    decision: str                                      # "refuse" | "allow"
+    fields: dict[str, bool]                            # the interface above
+    scores: dict[str, float]                           # strength per category, plus "explicit"
+    hits: dict[str, list[str]] = field(default_factory=dict)  # which rules fired (never sent to the prompter)
+    reasons: list[str] = field(default_factory=list)   # "prompt:<category>" when refused
 
-    @property
-    def review_categories(self) -> list[str]:
-        return [c for c in CATEGORIES if REVIEW_AT <= self.scores[c] < REFUSE_AT]
+
+_SPLIT_LETTERS = re.compile(r"\b(?:[a-z0-9][\s._\-*]+){2,}[a-z0-9]\b")
 
 
 def _join_split_letters(text: str) -> str:
@@ -159,10 +175,15 @@ def _join_split_letters(text: str) -> str:
     return _SPLIT_LETTERS.sub(lambda m: re.sub(r"[\s._\-*]+", "", m.group(0)), text)
 
 
+def _base(prompt: str) -> str:
+    text = unicodedata.normalize("NFKC", prompt).translate(ZERO_WIDTH)
+    return unidecode(text).lower()
+
+
 def normalise(prompt: str) -> tuple[str, str]:
     """Return (with_digits, words). Digits are kept in the first form for age
     checks and mapped to letters in the second form for term checks."""
-    text = unicodedata.normalize("NFKC", prompt).translate(ZERO_WIDTH).lower()
+    text = _base(prompt)
     text = re.sub(r"(.)\1{2,}", r"\1\1", text)  # "teeeeen" -> "teen"
     text = _join_split_letters(text)
     with_digits = re.sub(r"[-_/]+", " ", text)
@@ -171,6 +192,26 @@ def normalise(prompt: str) -> tuple[str, str]:
     words = re.sub(r"[^a-z\s]+", " ", words)
     words = re.sub(r"\s+", " ", words).strip()
     return with_digits, words
+
+
+def tricks(prompt: str) -> list[str]:
+    """Signs that the text was dressed up to get past a word check."""
+    found = []
+    nfkc = unicodedata.normalize("NFKC", prompt)
+    if nfkc != unicodedata.normalize("NFC", prompt):
+        found.append("full-width or styled letters")
+    if any(ord(ch) in ZERO_WIDTH for ch in prompt):
+        found.append("hidden zero-width characters")
+    if any(ch.isalpha() and not ch.isascii() and unidecode(ch).isascii() and unidecode(ch).isalpha()
+           and len(unidecode(ch)) == 1 for ch in nfkc) and re.search(r"[a-z]", nfkc.lower()):
+        found.append("look-alike letters from another alphabet")
+    if re.search(r"\b[a-z]+[013457@$][a-z0-9@$]*[a-z]\b", _base(prompt)) and not re.search(r"\b\d+(?:st|nd|rd|th|s|k|p|yo)\b", _base(prompt)):
+        found.append("numbers or symbols inside words")
+    if _SPLIT_LETTERS.search(_base(prompt)):
+        found.append("words split into single letters")
+    if re.search(r"([a-z])\1{2,}", _base(prompt)):
+        found.append("stretched letters")
+    return found
 
 
 def _under_18(with_digits: str) -> bool:
@@ -183,16 +224,32 @@ def _under_18(with_digits: str) -> bool:
     return False
 
 
+
+
 def _split_runs(prompt: str) -> list[str]:
     """Words spelled out one character at a time, joined and leet-mapped.
     "a t e e n" -> "ateen": the article gets glued on, so these runs are
     searched for terms as substrings instead of whole words."""
-    text = unicodedata.normalize("NFKC", prompt).translate(ZERO_WIDTH).lower()
-    runs = [re.sub(r"[\s._\-*]+", "", m.group(0)) for m in _SPLIT_LETTERS.finditer(text)]
+    runs = [re.sub(r"[\s._\-*]+", "", m.group(0)) for m in _SPLIT_LETTERS.finditer(_base(prompt))]
     return [r.translate(LEET) for r in runs]
 
 
-def _find(pattern: re.Pattern[str], terms: tuple[str, ...], texts: tuple[str, str], runs: list[str]) -> str | None:
+def _near(token: str, term: str) -> bool:
+    """A narrow misspelling: two letters swapped ("chlid") or one dropped ("chld").
+    Only for single-word terms of 5+ letters, same first letter, so "chili" is
+    not "child" and "manor" is not "minor"."""
+    if len(term) < 5 or " " in term or token == term or token[0] != term[0]:
+        return False
+    if len(token) == len(term):
+        diff = [i for i in range(len(term)) if token[i] != term[i]]
+        return len(diff) == 2 and diff[1] == diff[0] + 1 and token[diff[0]] == term[diff[1]] and token[diff[1]] == term[diff[0]]
+    if len(token) == len(term) - 1:
+        return any(term[:i] + term[i + 1:] == token for i in range(1, len(term)))
+    return False
+
+
+def _find(pattern: re.Pattern[str], terms: tuple[str, ...], texts: tuple[str, str], runs: list[str],
+          tokens: list[str]) -> str | None:
     for text in texts:
         m = pattern.search(text)
         if m:
@@ -202,25 +259,26 @@ def _find(pattern: re.Pattern[str], terms: tuple[str, ...], texts: tuple[str, st
             squashed = t.replace(" ", "")
             if len(squashed) >= 4 and squashed in run:
                 return t
+    for t in terms:
+        for tok in tokens:
+            if _near(tok, t):
+                return f"{tok} (~{t})"
     return None
-
-
-# A negative prompt that excludes adulthood next to a sexual prompt is asking for a minor.
-_ADULT_EXCLUSION_RE = _pattern(("adult", "adults", "mature", "grown up", "grownup", "old", "older", "aged",
-                                "wrinkles", "milf", "woman", "women", "man", "men"))
 
 
 def assess(prompt: str, negative_prompt: str | None = None) -> PromptAssessment:
     with_digits, words = normalise(prompt)
     texts = (words, with_digits)
     runs = _split_runs(prompt)
-    sexual = bool(_SEXUAL_RE.search(words)) or any(t in r for r in runs for t in SEXUAL if len(t) >= 4)
+    tokens = words.split()
+    sexual = bool(_SEXUAL_RE.search(words)) or any(t in r for r in runs for t in SEXUAL if len(t) >= 4) \
+        or any(_near(tok, t) for tok in tokens for t in SEXUAL)
 
     scores = {c: 0.0 for c in CATEGORIES}
     hits: dict[str, list[str]] = {}
     for category, rules in _RULE_RE.items():
         for rule, pattern in rules:
-            found = _find(pattern, rule.terms, texts, runs)
+            found = _find(pattern, rule.terms, texts, runs, tokens)
             if found is None:
                 continue
             weight = rule.with_sexual if (sexual and rule.with_sexual is not None) else rule.weight
@@ -240,16 +298,18 @@ def assess(prompt: str, negative_prompt: str | None = None) -> PromptAssessment:
             hits.setdefault("minor", []).append(f"negative prompt excludes adults: {m.group(0)!r} + sexual context -> 0.9")
 
     scores["explicit"] = 0.9 if _EXPLICIT_STRONG_RE.search(words) else 0.6 if _EXPLICIT_SOFT_RE.search(words) else 0.0
-    refuse = [c for c in CATEGORIES if scores[c] >= REFUSE_AT]
-    review = [c for c in CATEGORIES if REVIEW_AT <= scores[c] < REFUSE_AT]
-    if refuse:
-        return PromptAssessment("refuse", scores, hits, sorted(f"prompt:{c}" for c in refuse))
-    if review:
-        return PromptAssessment("review", scores, hits, sorted(f"review:prompt_{c}" for c in review))
-    return PromptAssessment("allow", scores, hits, [])
+    trick_signs = tricks(prompt) + (tricks(negative_prompt) if negative_prompt else [])
+    if trick_signs:
+        hits["tricks"] = sorted(set(trick_signs))
+    fields = {FIELD_NAMES[c]: scores[c] >= FIELD_AT for c in CATEGORIES}
+    fields["sexual_content"] = sexual
+    fields["tries_to_trick_the_checker"] = bool(trick_signs)
+    refused = [c for c in CATEGORIES if fields[FIELD_NAMES[c]]]
+    if refused:
+        return PromptAssessment("refuse", fields, scores, hits, sorted(f"prompt:{c}" for c in refused))
+    return PromptAssessment("allow", fields, scores, hits, [])
 
 
 def check(prompt: str, negative_prompt: str | None = None) -> list[str]:
-    """Reasons to refuse the prompt (the refuse band). Empty means it may be generated."""
-    a = assess(prompt, negative_prompt)
-    return a.reasons if a.decision == "refuse" else []
+    """Reasons to refuse the prompt. Empty means it may be generated."""
+    return assess(prompt, negative_prompt).reasons

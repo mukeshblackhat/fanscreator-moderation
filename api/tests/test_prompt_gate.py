@@ -44,7 +44,6 @@ def test_other_categories_refused(prompt, reason):
     "an 18-year-old graduate",
     "two adults, both 30 years old",
     "kidney beans in a bowl",            # word boundaries: "kid" is not inside "kidney"
-    "a teenage mutant ninja turtle style frog",  # "teenage" is not a listed term; documented limit
 ])
 def test_allowed(prompt):
     assert check(prompt) == []
@@ -58,3 +57,9 @@ def test_normalise_keeps_digits_for_ages_and_maps_them_for_words():
     with_digits, words = normalise("A T33N, 16-yo")
     assert "16 yo" in with_digits
     assert "teen" in words
+
+
+def test_false_refusals_are_accepted():
+    """Bias towards refusing: a false refusal is acceptable, a false pass is not.
+    "teenage" is one letter from "teenager", so this harmless prompt is refused."""
+    assert check("a teenage mutant ninja turtle style frog") == ["prompt:minor"]

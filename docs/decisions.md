@@ -69,7 +69,7 @@ Tests start the real fake provider and the real API as subprocesses on ports 180
 Fail closed, every frame scored, and score once all live in the same pipeline code (claim, call, record, decide). Splitting them would have meant writing throwaway intermediate versions of that pipeline, so they landed together in `fix: fail closed ...`. Prompts (3) and the review page (5) have their own commits.
 
 ## 18. Retry budgets are counted from the ledger, per job
-Timeouts and 5xx share a budget of 3, 429 has its own budget of 10, malformed answers get 2. The counts come from `provider_calls` rows for that job, not from an in-memory counter, so a worker crash or a redelivery cannot reset them. A re-screen creates a new job and so gets a fresh budget.
+Each failure type has its own budget: timeout 3, 500 or no connection 4, 429 5, malformed 2 (see #41). The counts come from `provider_calls` rows for that job, not from an in-memory counter, so a worker crash or a redelivery cannot reset them. A re-screen creates a new job and so gets a fresh budget.
 
 ## 19. Malformed holds are not re-screened automatically
 A malformed answer means the provider is broken in a way a retry did not fix. It is held as `provider_malformed`, logged at error level, and cannot be approved (409). An admin can still reject it. Automatic re-screen is only for `screening_unavailable`.
@@ -122,8 +122,8 @@ CPU scoring can take longer than the 2 s sync timeout, so the real provider alwa
 ## 35. The task's media format, and why both forms are accepted
 The task page shows frames as flat score objects (`{"explicit": 0.95, "self_harm": 0.1}`) and generated media as `"source": "generation"`. The build started from a transcription that used `{"scores": {...}}` and `"generated"`. The API now treats the task's format as primary and still accepts the nested form and `"generated"`, normalising both at the edge. Internally frames are stored as `{"scores": {...}}` (real uploads add an `image` path to the same object), so the pipeline did not change. A flat frame can never be read as all zeros: scores are any numeric keys, each must be 0 to 1, and anything else is a 422.
 
-## 36. Prompts are scored, with a review band, not just matched
-The first prompt gate was a yes/no term list. It now scores each category 0 to 1 with weighted rules, on the same thresholds as media: 0.8 refuses (422 before generating), 0.5 to 0.8 generates but holds the output for a human (`review:prompt_<category>`), below 0.5 is allowed. The review band is for prompts that are suspicious but not clear-cut ("school uniform", "young" next to "nude", step-family next to "naked"). Refusing those outright would over-block; allowing them silently would trust the output check alone. Holding the output lets a human decide, and it never softens a blocking output: if the output scores 0.9 on a prohibited label it is still blocked. The 422 body stays exactly `{"reasons": [...]}` as the task requires.
+## 36. Prompts are refused or allowed, never "generate and hold"
+Following the brief and our working notes: refuse if any prohibited field is true, otherwise allow, with a bias towards refusing. An earlier version had a middle band (0.5 to 0.8) that generated the output and then held it for review. That sent too much to human approval and contradicted the notes, so it was removed (migration 0004 drops `media.prompt_flags`). Prompts that used to land in that band ("school uniform", "young" next to "nude", step-family next to "naked", "celebrity lookalike") are now refused. The checker returns the notes' boolean interface (`under_18_or_looks_young` ... `tries_to_trick_the_checker`). `sexual_content` and `tries_to_trick_the_checker` never refuse on their own. The 422 names the category only; which rule fired is visible to workspace admins in the tester, never to the person prompting. Known accepted false refusal: "a teenage mutant ninja turtle style frog" ("teenage" is one letter from "teenager").
 
 ## 37. The negative prompt is part of the check
 A negative prompt that excludes adulthood ("adult, mature, wrinkles") next to a sexual prompt is a known way of asking for a minor without saying so. That scores minor 0.9 (refuse). Excluding children in a negative prompt is what a negative prompt is for, so that alone is never penalised.
@@ -133,3 +133,15 @@ A negative prompt that excludes adulthood ("adult, mature, wrinkles") next to a 
 
 ## 39. Provider controls live on every tab
 Switching the fake provider's state (healthy, slow with a delay, outage, 500s, 429, bad answers, duplicate callbacks, reset) is a page-wide bar, not part of Try it, so any state can be set while watching the review queue or the media list. It calls the provider's own `/_control`, the same endpoint the graders use.
+
+## 40. Decision order: explicit-in-unverified blocks before anything is held
+The rules are checked in the order of our notes, first match wins: prohibited at 0.8 or more blocks; explicit at 0.8 or more in an unverified workspace blocks; prohibited from 0.5 up to 0.8 holds; otherwise published. Earlier the hold came before the explicit-unverified block, so an explicit item with a 0.6 score in an unverified workspace went to a human when it should simply be blocked. Blocked beats held, and held beats published. Explicit content alone never holds.
+
+## 41. Retry limits per failure type
+From our notes: timeout 3, 429 5, 500 or no connection 4, malformed 2. They are counted separately per job from the `provider_calls` ledger. A re-screen still gets one try, because it is a probe of a provider that just failed.
+
+## 42. media.created_by
+Every media row records the `X-User-Id` that uploaded or generated it (migration 0004), for audit and for account-level strikes on repeated prompt refusals.
+
+## 43. What we use from the notes, and what we don't
+Used: Unicode NFKC plus look-alike mapping (`unidecode`), zero-width and spacing removal, leetspeak, narrow misspelling matching, ages in digits and words, combination rules, the boolean interface, generic refusals, and the decision order. Not used: `rapidfuzz` (general fuzzy matching refused harmless words like "chili" and "manor", so only swapped or dropped letters in words of 5+ letters count), `word2number` (ages 0 to 17 in words are covered directly), and spaCy NER for names (matching a celebrity list directly gives the same result here without a model download).

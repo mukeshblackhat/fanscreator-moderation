@@ -1,8 +1,10 @@
 """Prompt engine endpoints (extra to the graded API).
 
-POST /prompts/check   score a prompt without generating anything: decision, per-category
-                      scores, the rule hits behind them, and the thresholds. Recorded in
-                      prompt_events like any decision (hash only, never the text).
+POST /prompts/check   check a prompt without generating anything: decision (refuse or
+                      allow), the boolean fields, and per-category strengths. Which rules
+                      fired is shown to workspace admins only: the person prompting never
+                      learns which word triggered a refusal. Recorded in prompt_events
+                      like any decision (hash only, never the text).
 GET  /prompts/events  recent prompt decisions in the caller's workspace (no prompt text).
 """
 from fastapi import APIRouter, Depends
@@ -24,14 +26,18 @@ async def check_prompt(body: PromptCheckIn, caller: Caller = Depends(require_mem
     async with session.begin():
         await prompt_audit.record(session, workspace_id=caller.workspace_id, user_id=caller.user_id, kind="check",
                                   prompt=body.prompt, negative_prompt=body.negative_prompt, assessment=a)
-    return {
+    body_out = {
         "decision": a.decision,
         "reasons": a.reasons,
+        "fields": a.fields,
         "scores": a.scores,
-        "hits": a.hits,
-        "thresholds": {"refuse": prompt_gate.REFUSE_AT, "review": prompt_gate.REVIEW_AT},
+        "field_threshold": prompt_gate.FIELD_AT,
         "categories": list(prompt_gate.CATEGORIES),
+        "field_names": prompt_gate.FIELD_NAMES,
     }
+    if caller.is_admin:
+        body_out["hits"] = a.hits
+    return body_out
 
 
 @router.get("/prompts/events")

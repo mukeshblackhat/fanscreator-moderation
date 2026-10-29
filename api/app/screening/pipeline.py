@@ -62,7 +62,7 @@ async def finalize(media_id: uuid.UUID, token: uuid.UUID, frames: list[dict[str,
     async with SessionLocal() as session, session.begin():
         media = (await session.execute(text(
             """
-            SELECT m.status, m.frame_count, m.screening_token, m.prompt_flags, w.verified
+            SELECT m.status, m.frame_count, m.screening_token, w.verified
             FROM media m JOIN workspaces w ON w.id = m.workspace_id
             WHERE m.id = :m FOR UPDATE OF m
             """
@@ -82,7 +82,7 @@ async def finalize(media_id: uuid.UUID, token: uuid.UUID, frames: list[dict[str,
             frames = (await session.execute(text("SELECT frames FROM scores WHERE media_id = :m"),
                                             {"m": media_id})).scalar_one()
 
-        decision = decide(frames, media["verified"], media["prompt_flags"] or [])
+        decision = decide(frames, media["verified"])
         decision_id = uuid.uuid4()
         await session.execute(text(
             """
@@ -242,16 +242,17 @@ async def _handle(job: ClaimedJob, call_id: uuid.UUID, outcome: ProviderOutcome)
 
     if outcome.kind in FAILURE_OUTCOMES:
         await breaker.record_failure()
-        failures = sum(counts.get(k, 0) for k in FAILURE_OUTCOMES)
-        # A re-screen is itself a probe of a provider that just failed: one try,
-        # then back to held. The loop will try again later at no extra cost.
-        budget = 1 if job.lane == "rescreen" else settings.max_failure_attempts
+        failures = counts.get(outcome.kind, 0)
+        # Each failure type has its own limit (timeout 3, 5xx or no connection 4). A re-screen
+        # is itself a probe of a provider that just failed: one try, then back to held.
+        budget = (1 if job.lane == "rescreen" else
+                  settings.max_timeout_attempts if outcome.kind == "timeout" else settings.max_server_error_attempts)
         if failures >= budget:
             await hold(job, "screening_unavailable", f"screening_unavailable:{outcome.kind}")
             return
-        delay = queue.backoff_seconds(failures)
+        delay = queue.backoff_seconds(sum(counts.get(k, 0) for k in FAILURE_OUTCOMES))
         await queue.reschedule(job, delay, outcome.kind)
-        log.info("job_retry_scheduled", outcome=outcome.kind, failures=failures, delay_s=round(delay, 2))
+        log.info("job_retry_scheduled", outcome=outcome.kind, failures=failures, budget=budget, delay_s=round(delay, 2))
         return
 
     if outcome.kind == "rate_limited":
