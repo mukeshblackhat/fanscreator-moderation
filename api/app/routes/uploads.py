@@ -164,6 +164,8 @@ async def get_frame(
 
 @router.get("/real-mode")
 async def real_mode():
+    if settings.moderation_provider != "real":
+        return {"available": False, "reason": "MODERATION_PROVIDER=mock: uploads are scored by the mock provider"}
     try:
         async with httpx.AsyncClient(timeout=3) as client:
             r = await client.get(f"{settings.real_provider_url}/info")
@@ -171,4 +173,4 @@ async def real_mode():
             return {"available": True, **r.json()}
         return {"available": False, "reason": f"real provider answered {r.status_code} (still loading the model?)"}
     except httpx.HTTPError:
-        return {"available": False, "reason": "real provider is not running (start the stack with the 'real' profile)"}
+        return {"available": False, "reason": "real provider is not reachable (still starting, or it failed: check `docker compose logs real-provider`)"}

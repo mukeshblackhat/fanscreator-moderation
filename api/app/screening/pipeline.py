@@ -205,11 +205,11 @@ async def process(job: ClaimedJob, worker_id: str = "") -> None:
             await _maybe_hold_for_outage(job)
             return
 
-        real = is_real_upload(job.frames)
+        real = settings.moderation_provider == "real" and is_real_upload(job.frames)
         kind = "async_submit" if real or job.frame_count > SYNC_FRAME_LIMIT else "sync"
         call_id = await open_call(job, kind)
         with structlog.contextvars.bound_contextvars(provider_call_id=str(call_id),
-                                                     provider="real" if real else "fake"):
+                                                     provider="real" if real else "mock"):
             outcome = await provider_client.score(
                 str(job.media_id), _scores_only(job.frames), callback_url=settings.callback_url,
                 base_url=settings.real_provider_url if real else None)

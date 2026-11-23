@@ -22,11 +22,12 @@ docker compose up
 | --- | --- |
 | API | http://localhost:8000 (`/health`, `/metrics/summary`) |
 | Fake provider | http://localhost:8001 (`/_control`, `/_stats`, `/_reset`) |
+| Real provider | http://localhost:8002 (`/info`, `/_stats`) |
 | Review page | http://localhost:5173 |
 
 If you already run Postgres or Redis locally, set `DB_PORT` and `REDIS_PORT` in `.env` to free ports.
 
-`docker compose up` starts `db`, `redis`, `provider`, `api` (runs the migrations and an idempotent seed first), `worker` (2 replicas) and `web`. The seed creates `ws_verified` (users `admin_v`, `member_v`) and `ws_unverified` (users `admin_u`, `member_u`). `SCREENING_MODE=broken` in `.env` switches the workers to the deliberately unsafe v0.
+`docker compose up` starts `db`, `redis`, `provider`, `real-provider`, `api` (runs the migrations and an idempotent seed first), `worker` (2 replicas) and `web`. The seed creates `ws_verified` (users `admin_v`, `member_v`) and `ws_unverified` (users `admin_u`, `member_u`). `SCREENING_MODE=broken` in `.env` switches the workers to the deliberately unsafe v0.
 
 ### Develop with live reload
 
@@ -45,17 +46,7 @@ The page has a **fake provider bar on every tab**. It switches the provider to h
   - real file uploads
   - one-click synthetic test media
 
-### Real uploads (optional extra, beyond the task's scope)
-
-The task says no real images and no real classifier, and the graded service follows that: by default everything goes to the fake provider. Real uploads are an extra I added to see the pipeline work on real pixels. They are off unless you turn them on. To screen real files as well, turn on the `real` profile (`COMPOSE_PROFILES=real` in `.env`) and upload from the **Try it** tab.
-
-- **Primary scorer:** a local open-source image model (`Falconsai/nsfw_image_detection`, a ViT for normal vs nsfw). It runs on CPU in the `real-provider` container, so files never leave the machine.
-- **Optional second opinion:** OpenAI `omni-moderation-latest`, if `OPENAI_API_KEY` is set. It adds self-harm, and sexual violence as a heuristic (sexual and violent at once). For explicit, it takes the higher of the two scores.
-- **Never checked on real files:** age (`minor`), real person, and animals. Those need specialised models, and the minor category must never be tested with real images. Use the synthetic buttons for them.
-- **How files are handled:** images are re-encoded to JPEG (max 1024 px, EXIF removed). Videos up to 2 minutes are sampled at 1 frame per second with ffmpeg, and every frame is scored. The real provider always answers through the signed callback. If anything fails while scoring, it reports an error instead of a partial answer; that is retried once and then held, never published.
-- **Who can see frames:** published media is visible to members of its workspace, and score holds are visible to workspace admins for review. Pending, blocked and unscreened media is never served. Thumbnails of held or explicit media are blurred until clicked.
-
-The first build downloads torch and the model (about 1 GB).
+Real file uploads (JPG, PNG, MP4 and so on) go to the real provider by default. See [section 2](#2-real-moderation-provider).
 
 ### Tests
 
@@ -65,9 +56,9 @@ The API tests need a throwaway Postgres database and Redis. The harness migrates
 cd api
 uv sync
 TEST_DATABASE_URL=postgresql+asyncpg://moderation:moderation@localhost:5432/moderation_test \
-  SCREENING_MODE=fixed uv run pytest -v           # 215 tests
+  SCREENING_MODE=fixed uv run pytest -v           # 218 tests
 cd ../provider && uv sync && uv run pytest        # 6 tests
-cd ../provider_real && uv sync && uv run pytest   # 7 tests (stub model, no downloads)
+cd ../provider_real && uv sync && uv run pytest   # 10 tests (stub model, no downloads)
 cd ../web && pnpm install && pnpm test            # 22 tests
 ```
 
@@ -103,7 +94,154 @@ Media input follows the task's format: each frame is a flat object of label scor
 
 That exact example is a test (`tests/test_task_format.py`): blocked in `ws_unverified` (explicit on frame 1), published in `ws_verified`.
 
-## 2. The failure
+## 2. Real moderation provider
+
+The graded checks send JSON score documents, and those always go to the mock provider on port 8001. Real files uploaded from the **Try it** tab (or `POST /media/upload`) go to a real moderation path in the `real-provider` container. It is a cascade: a free local first pass on every frame, a free API only where the first pass is unsure, and a paid premium provider only where neither can decide.
+
+The adapter is set in `.env`:
+
+| `MODERATION_PROVIDER` | Real uploads go to |
+| --- | --- |
+| `real` (default) | `REAL_PROVIDER_URL`, the cascade below |
+| `mock` | `PROVIDER_URL`, the mock on port 8001, so a grader's mock scores real uploads too |
+
+`docker compose up` always starts `real-provider`. The first build downloads torch and both models (about 1 GB), and loading them takes about a minute. The workers wait for it so the first real upload is not held, but they still start if it never comes up.
+
+### The cascade
+
+```
+every frame ──> tier 1: local, CPU, $0
+                Falconsai/nsfw_image_detection   rev 96cb0d0342c7afb80cab76ecc58b265fa44da256
+                openai/clip-vit-base-patch32     rev 3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268
+                │  clearly safe: nsfw < 0.2, self-harm cue < 0.3, other cues < 0.5 ──> done
+                ▼
+            tier 2: OpenAI omni-moderation-latest, free (only if OPENAI_API_KEY is set)
+                │  a frame within 2 bits (64-bit average hash) of the last frame sent reuses its answer
+                ▼
+            tier 3: premium, AWS Rekognition DetectModerationLabels + RecognizeCelebrities
+                NOT WIRED (no key). Its slot is a human: what only tier 3 could clear is held.
+```
+
+- **Tier 1** has both models pinned to a commit and baked into the image, so it starts offline. Falconsai is a ViT for normal vs nsfw. CLIP scores zero-shot cues for person, minor, animal, self-harm and violence against a set of everyday scenes. Measured speed is 0.054 s per frame (Apple M3 Pro, 4 threads), so a one-minute video is about 3 s of CPU at 1 frame per second.
+- **Tier 2** is the `omni-moderation-latest` alias, not a pinned snapshot. On images it scores sexual, violence and self-harm. If it still fails after retries, the whole job fails closed and the API holds the item.
+- **Tier 3** would be Rekognition, pay-as-you-go. Hive was the obvious premium choice, but its self-serve plan is capped at 100 requests a day (see the comparison below).
+- **Every label on every frame carries a `checked_by` entry** naming what set it (for example `tier1:nsfw+tier2:openai` or `hold:sexual_age_unclear`). `GET /info` on port 8002 lists the detector per label and the hold rules.
+
+### Coverage per label
+
+A hold means the label is set to 0.5, which the policy sends to an admin. No label is ever a default 0. If the provider leaves a label out, the API treats the answer as malformed: retried once, then held (`validate_frames` in `api/app/screening/provider_client.py`).
+
+| Label | What detects it | When it is unsure or the check is missing |
+| --- | --- | --- |
+| `explicit` | Falconsai nsfw score, and the higher of that and OpenAI `sexual` when tier 2 runs | nsfw 0.2 or more goes to tier 2. A tier 2 error holds the whole item. |
+| `minor` | CLIP age cue, counted only on a person (`min(minor cue, person cue)`). No vendor has an image class for teenagers, and OpenAI `sexual/minors` is text only. | A sexual frame (explicit 0.5 or more) with a person and a minor cue of 0.3 or more is held (`hold:sexual_age_unclear`). |
+| `sexual_violence` | CLIP violence cue times explicit, and OpenAI `min(sexual, violence)` when tier 2 runs. No vendor has a dedicated class. | Without tier 2, a cue from 0.3 up to 0.5 is held (`hold:uncertain_no_tier2`). |
+| `bestiality` | CLIP animal cue times explicit. Only Hive has a class for it, and only through sales. | Animal cue and explicit both 0.3 or more is held (`hold:animal_and_sexual`). |
+| `self_harm` | CLIP self-harm cue, and the higher of that and OpenAI `self-harm` when tier 2 runs | Self-harm cue 0.3 or more goes to tier 2. Without tier 2, a cue from 0.3 up to 0.5 is held. |
+| `real_person` | Nothing in tiers 1 and 2. Rekognition RecognizeCelebrities would cover celebrities only, and no API identifies private people. | Any frame with a person (person cue 0.5 or more) is held (`hold:no_identity_detector`). With no person, the person cue itself is the score. |
+
+Known limits:
+- **CLIP is a weak age estimator.** On the calibration photos children scored 0.83 to 0.90 and the highest adult 0.72. That is why age only ever holds, never clears, a sexual frame.
+- **`real_person` holds most media with people in it** until tier 3 is wired. On a creator platform that is most uploads. It is the price of never calling "cannot check" safe.
+- **Calibration is thin.** Thresholds were set on 22 benign COCO photos. By design no prohibited real images were used, and the prohibited paths are tested with a stub model that maps colours to cues.
+- **CSAM hash matching** (PhotoDNA, Thorn Safer) is not here. It belongs in front of everything (see section 9).
+
+### Cost
+
+Volume: 10,000 images and 1,000 one-minute videos a month at 1 frame per second is 70,000 frames today and 700,000 at 10x. Prices are US list prices, checked on 22 Nov 2026.
+
+The cascade's monthly cost, with F frames a month, x the share sent to tier 2 and y the share sent to tier 3 at P per frame:
+
+```
+monthly = VM + F·x·$0 + F·y·P
+```
+
+- **x = 25%, measured.** 5 of 20 benign stills were escalated. Near-duplicate reuse should lower it on video, but that is not measured.
+- **y = 5%, an assumption.** Nothing measures it while tier 3 is not wired. It depends mostly on how `real_person` is routed: if every frame with a person goes to RecognizeCelebrities, y approaches the share of frames with a person, and tier 3 costs as much as sending every frame.
+- **P = $0.002.** Rekognition bills each API call separately, so moderation plus celebrities is 2 × $0.001.
+
+**Price per 1,000 frames**
+
+| Step | $ per 1,000 frames |
+| --- | --- |
+| Tier 1, local models | $0 (the VM is a fixed cost) |
+| Tier 2, OpenAI omni-moderation | $0 |
+| Tier 3, Rekognition moderation + celebrities | $2.00 |
+| Cascade, blended at y = 5% (fees only) | $0.10 |
+| Rekognition moderation only | $1.00 |
+| Google Vision SafeSearch | $1.50 |
+| Sightengine, nudity + face-age + self-harm (overage rate) | $6.00 |
+| Hive self-serve | $3.00, capped at 100 requests a day |
+
+**Frames sent per one-minute video:** 60 to tier 1, about 15 to tier 2 at x = 25% (before near-duplicate reuse), and about 3 to tier 3 at y = 5%.
+
+**Monthly cost**
+
+| Setup | Today (70k frames) | 10x (700k frames) |
+| --- | --- | --- |
+| Cascade on Hetzner CCX13, tier 3 on Rekognition (y = 5%) | €36.99 + $7 | €36.99 + $70 |
+| Same cascade on AWS c7i.xlarge | $130.67 + $7 | $130.67 + $70 |
+| Cascade as built (tier 3 not wired) | VM only, plus human review of every hold | VM only, plus human review |
+| Every frame to Rekognition moderation | $70 | $700 |
+| Every frame to Rekognition moderation + celebrities | $140 | $1,400 |
+| Every frame to Google SafeSearch | $103.50 | $1,048.50 |
+| Every frame to Sightengine, 3 models | $439 | $4,219 |
+| Every frame to Hive at list price | $210, not allowed under the self-serve cap | $2,100, needs a contract |
+| Every frame to OpenAI omni-moderation | $0, but it misses minor, bestiality and real_person | $0 |
+
+OpenAI calls at x = 25% are about 17,500 a month today (about 580 a day) and 175,000 at 10x (about 5,800 a day). That is well under the free tier's 250 requests a minute. Tier 1 needs about 63 CPU-minutes a month today and about 10.5 CPU-hours at 10x (measured per-frame time on a laptop). Burst latency, not the average, decides the machine size, so benchmark before picking one.
+
+**Fixed costs**
+- VM from day one: Hetzner CCX13 (2 dedicated vCPU, 8 GB) €36.99 a month in Helsinki, €43.99 in Ashburn. AWS c7i.xlarge on demand is $0.179 an hour, about $130.67 a month.
+- No contract minimums for OpenAI or Rekognition.
+- Free tiers: OpenAI moderation is free (rate limited by tier). AWS gives 1,000 Group 2 images a month for 12 months, or up to $200 in credits for accounts created after 15 Jul 2025. Google gives 1,000 units a month. All are negligible at this volume.
+- Hive: self-serve is capped at 100 requests a day. Volume needs an annual contract with unpublished pricing.
+- Sightengine: plan fee of $29 or $99 a month, plus overage per operation.
+
+Price pages, checked 22 Nov 2026:
+- OpenAI: https://developers.openai.com/api/docs/guides/moderation, https://developers.openai.com/api/docs/models/omni-moderation-latest
+- AWS Rekognition: https://aws.amazon.com/rekognition/pricing/
+- Google Vision: https://cloud.google.com/vision/pricing
+- Sightengine: https://sightengine.com/pricing
+- Hive (now Deploy): https://deploy.com/pricing, https://docs.thehive.ai/docs/visual-content-moderation
+- Hetzner: https://www.hetzner.com/cloud/general-purpose/
+- AWS EC2 (third-party mirror of AWS prices): https://instances.vantage.sh/aws/ec2/c7i.xlarge?region=us-east-1, https://instances.vantage.sh/aws/ec2/g4dn.xlarge?region=us-east-1
+
+### Cheap vs premium
+
+| | Cascade (chosen) | Hive, every frame | Rekognition, every frame |
+| --- | --- | --- | --- |
+| Today / 10x | €37 + $7 / €37 + $70 | $210 / $2,100 (contract) | $140 / $1,400 |
+| Bestiality | CLIP cue, held when unsure | Yes, a dedicated class | No |
+| Minor | CLIP cue, held when unsure | Babies and children up to about 11 only. Teens not covered | No (DetectFaces age range as a proxy, +$0.001 a frame) |
+| Real person | Held for a human | Celebrities only, through sales | Celebrities only |
+| Self-serve | Yes | 100 requests a day | Yes, no cap |
+
+What I chose: self-hosted tier 1, free OpenAI tier 2, and Rekognition pay-as-you-go for tier 3, with a human in tier 3's slot until a key exists.
+
+What I gave up:
+- Hive's dedicated bestiality class and its child-presence classes. My bestiality and minor checks are CLIP prompts, which are weaker, so they only hold and never clear.
+- A calibrated age model. Sightengine `face-age` gives a minor probability on visible real faces, at $2 per 1,000 frames more.
+- Automated `real_person` clearing. Until tier 3 is wired, a human checks every frame with a person.
+
+When I'd switch:
+- **Hive contract.** The self-serve cap is about 3,000 premium frames a month. At y = 5% that is passed at 60,000 frames a month, so today's volume is already over it. Worth a quote at 35,000 premium frames a month (10x), and only for the bestiality and child classes. At list price that is $105 a month against Rekognition's $70.
+- **Rekognition volume pricing.** The first discount starts at 1M images a month. No contract needed before then.
+- **GPU (g4dn.xlarge, $383.98 a month).** Breaks even with Rekognition moderation + celebrities at about 192,000 premium frames a month. At y = 5% that is 3.8M frames a month, about 55x today. Not worth it within 10x, and a GPU can't replace celebrity recognition.
+- **Self-hosting tier 1 at all.** Against sending every frame to Rekognition moderation ($70), it is about break-even today and saves about $570 to $660 a month at 10x.
+
+### Demo: one real JPG and one real MP4
+
+<!-- DEMO-EVIDENCE -->
+
+The full run is in [`docs/evidence/06-real-provider-demo.md`](docs/evidence/06-real-provider-demo.md). An earlier tier-1-only check on public Wikimedia files is in [`real-model-check.md`](docs/evidence/real-model-check.md).
+
+How files are handled:
+- **Images** are re-encoded to JPEG (max 1024 px, EXIF removed). **Videos** up to 2 minutes are sampled at 1 frame per second with ffmpeg, and every frame is scored.
+- **The real provider always answers through the signed callback.** If anything fails while scoring, it reports an error instead of a partial answer. That is retried once and then held, never published.
+- **Who can see frames:** published media is visible to members of its workspace, and score holds are visible to workspace admins for review. Pending, blocked and unscreened media is never served. Thumbnails of held or explicit media are blurred until clicked.
+
+## 3. The failure
 
 `api/app/screening/broken_handler.py` (`SCREENING_MODE=broken`) reproduces the incident on purpose:
 
@@ -119,7 +257,7 @@ Evidence against v0:
 - [`01-broken-tests.txt`](docs/evidence/01-broken-tests.txt): all 6 API incident tests and the review page error-state test fail; every other test passes.
 - [`02-broken-workload.json`](docs/evidence/02-broken-workload.json): the incident replayed (30 s healthy, 40 s provider timeout with a 200-video burst, 60 s recovery). 30 items went live that should not have, and 9 of 9 refused prompts were accepted.
 
-## 3. The fix
+## 4. The fix
 
 | Symptom | What changed | Why | Test |
 | --- | --- | --- | --- |
@@ -164,7 +302,7 @@ Fairness: images, videos and re-screens each have their own lane and worker conc
 
 The other decisions are in [`docs/decisions.md`](docs/decisions.md).
 
-## 4. Before and after
+## 5. Before and after
 
 Same seeded workload, both runs. v0 ran on the schema it was written for (migration 0001).
 
@@ -209,7 +347,7 @@ Every log line is JSON with `workspace_id`, `media_id`, `job_id`, `attempt`, `la
 09:27:43.434 media_decided        status=published
 ```
 
-## 5. Crash test
+## 6. Crash test
 
 `scripts/crash_test.py` starts a worker with `CRASH_AFTER_PROVIDER=1`. That worker calls `os._exit(137)` right after the provider scores a 20-frame video, before anything is saved. The video has explicit content only on its last frame and sits in the unverified workspace. Result ([`05-crash-test.json`](docs/evidence/05-crash-test.json)):
 
@@ -226,7 +364,7 @@ Every log line is JSON with `workspace_id`, `media_id`, `job_id`, `attempt`, `la
 - Clock skew on lease times. Leases use the database clock, which helps, but I haven't tested it.
 - A provider without idempotency keys, where retrying after an unknown outcome gets billed twice.
 
-## 6. Limits and what's unfinished
+## 7. Limits and what's unfinished
 
 - `docker compose up` was verified from a clean build (`docker compose build --no-cache`) on macOS with Docker 29.6 and Compose 5.3. All services came up healthy, and a smoke run against the stack checked:
   - a clean image is published
@@ -236,16 +374,17 @@ Every log line is JSON with `workspace_id`, `media_id`, `job_id`, `attempt`, `la
   - an outage holds an upload, approving that hold gets 409, and the upload is published after recovery
   - unchecked published stays 0
   I did not re-run the full workload inside compose; that ran against the same code on local Postgres 16 and Redis 7.
-- The prompt gate is rules only. It misses paraphrase and other languages, and it will over-block some innocent text. Production needs a classifier (see Part 3).
+- The real provider's tier 3 is not wired (no key), so every real upload with a person in it is held for a human. Thresholds were calibrated on 22 benign photos only. See section 2.
+- The prompt gate is rules only. It misses paraphrase and other languages, and it will over-block some innocent text. Production needs a classifier (see section 9).
 - The workspace in-flight cap is soft. Two simultaneous claims can briefly exceed it. It's about fairness, not safety.
 - In a quiet outage, held items come back up to 30 s after the provider recovers (the probe window). With traffic, it's about 2 s.
 - The callback watchdog will pay for a second call if a callback is just late (tested and documented).
 - Malformed holds don't re-screen automatically. An admin can reject them but not approve them.
 - `/metrics/summary` is unauthenticated. It returns counts only.
 
-**Time spent:** about 3 hours of active work on 29 Oct 2026, spread across the day.
+**Time spent:** about 3 hours of active work on 29 Oct 2026, spread across the day, plus about 3 hours on 22 Nov 2026 for the real moderation provider add-on.
 
-## 7. Production plan
+## 8. Production plan
 
 **First 15 minutes: stop the harm.**
 1. Turn on a hold-everything flag for new uploads (fail closed), and freeze publishing for anything without a decision row.
@@ -275,24 +414,13 @@ Every log line is JSON with `workspace_id`, `media_id`, `job_id`, `attempt`, `la
 - Check the provider invoice matches the ledger.
 - Write the postmortem.
 
-## 8. Part 3 answers
+## 9. Part 3 answers
 
-**Scoring in production.** A mix.
+**Scoring in production.** A cascade, which is what [section 2](#2-real-moderation-provider) builds. A self-hosted first pass scores every frame for free, the free OpenAI moderation API sees only the frames the first pass can't clear, and a premium provider (AWS Rekognition moderation plus celebrity recognition, pay-as-you-go) sees only what neither can decide. No single vendor covers all five prohibited categories. Age, real person and bestiality need a second model or a human, and an unchecked category is held, never scored 0.
 
-At low volume, a paid API: Hive visual moderation, or AWS Rekognition for moderation plus celebrity recognition for `real_person`. Later, a self-hosted classifier on GPUs scores every frame, and only the uncertain band (roughly 0.3 to 0.9) goes to the paid API as a second opinion. No single vendor covers all five prohibited categories well. Age and real-person checks in particular need a second model.
+For 10,000 images and 1,000 one-minute videos a month at 1 frame per second (70,000 frames), that is about €37 for the VM plus $7 in Rekognition fees today, and €37 plus $70 at 10x. That assumes 5% of frames reach the premium tier. Sending every frame to Rekognition moderation plus celebrities would cost $140 and $1,400, and to Hive $210 and $2,100. CSAM hash matching is a separate contract. The full table, the assumptions and the price links (checked 22 Nov 2026) are in section 2.
 
-For 10,000 images and 1,000 one-minute videos a month at 1 frame per second, that's 10,000 + 60,000 = 70,000 frames:
-
-| Option | Price used | Month |
-| --- | --- | --- |
-| AWS Rekognition moderation | $0.001 per image, $0.10 per video minute | about $110 |
-| Hive visual moderation, frames as images | $3 per 1,000 requests | about $210 |
-| Celebrity check for `real_person` | about $0.001 per frame with a face | up to about $70 |
-| CSAM hash matching | vendor quote (for example Thorn Safer via Hive) | contract |
-
-**Roughly $110 to $280 a month in scoring fees, plus a CSAM matching contract.** List prices were checked in October 2026, but they change, so confirm before committing.
-
-I score every second at this volume because it's cheap and the incident happened because frames were skipped. Once frames cost real money, I'd collapse near-identical frames with a perceptual hash (or sample by scene change), so every second is still covered by its own score or one from a nearly identical frame.
+I score every second because the incident happened when frames were skipped. Tier 1 is free per frame, so every second gets its own score. Only the paid and rate-limited calls reuse an answer, and only for a near-identical frame (a perceptual hash within 2 bits).
 
 **Prompt checks.**
 1. Normalise: Unicode NFKC, character substitutions, spacing tricks, and translation to English.
@@ -328,11 +456,12 @@ Then move frame-level work to Redis Streams or SQS, while Postgres keeps one row
 ## Layout
 
 ```
-api/        FastAPI app, Alembic migrations, screening pipeline and worker, tests
-provider/   Fake moderation provider
-web/        React review queue
-scripts/    workload.py, report.py, crash_test.py
-docs/       decisions.md, ai-log.md, evidence/
+api/            FastAPI app, Alembic migrations, screening pipeline and worker, tests
+provider/       Fake moderation provider
+provider_real/  Real moderation provider (tier 1 local models, tier 2 OpenAI)
+web/            React review queue
+scripts/        workload.py, report.py, crash_test.py
+docs/           decisions.md, ai-log.md, evidence/
 ```
 
 How I used AI on this is in [AI.md](AI.md).

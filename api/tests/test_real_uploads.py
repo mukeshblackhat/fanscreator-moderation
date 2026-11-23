@@ -1,5 +1,7 @@
 """Real file uploads end to end: API -> media store -> worker -> real provider
 (stub model: a mostly red image scores explicit 0.95) -> signed callback -> decision."""
+import hashlib
+import hmac
 import io
 import json
 import subprocess
@@ -10,6 +12,9 @@ import pytest
 from PIL import Image
 from sqlalchemy import text
 
+from app.config import settings
+from app.screening import pipeline, queue
+from app.screening.provider_client import ALL_LABELS, ProviderOutcome, validate_frames
 from conftest import ADMIN_U, ADMIN_V, MEDIA_STORE, MEMBER_U, MEMBER_V, MODE, wait_final
 
 pytestmark = pytest.mark.skipif(MODE != "fixed", reason="real uploads use the fixed pipeline")
@@ -102,4 +107,43 @@ async def test_held_frames_are_for_admins_only(api, db):
 async def test_real_mode_info(api):
     info = (await api.get("/real-mode")).json()
     assert info["available"] is True
-    assert info["checked_labels"] == ["explicit"] and "minor" in info["not_checked_labels"]
+    # real_person has no identity detector without a premium key: a person in frame is held, never 0
+    assert "minor" in info["checked_labels"] and info["not_checked_labels"] == ["real_person"]
+
+
+async def test_mock_adapter_scores_real_uploads_on_the_mock(api, provider, workers, monkeypatch):
+    """MODERATION_PROVIDER=mock: the red photo goes to the mock, which scores it all zero,
+    so it is published where the real model would have blocked it."""
+    monkeypatch.setattr(settings, "moderation_provider", "mock")
+    await workers(1)
+    media_id = (await send(api, MEMBER_U, png(RED), "a.jpg", "image/jpeg")).json()["id"]
+    assert (await wait_final(api, MEMBER_U, media_id))[0] == "published"
+    assert (await provider.get("/_stats")).json()["calls"] == {media_id: 1}
+
+
+async def test_real_callback_missing_a_label_is_held_never_published(api, workers):
+    """An unchecked label is not a 0. The real provider's answer must carry all six,
+    else it is malformed: retried once, then held as provider_malformed."""
+    media_id = (await send(api, MEMBER_V, png(BLUE), "b.jpg", "image/jpeg")).json()["id"]
+    partial = {label: 0.0 for label in ALL_LABELS if label != "minor"}
+    for attempt in range(settings.max_malformed_attempts):
+        job = await queue.claim("image")
+        assert job is not None and str(job.media_id) == media_id
+        provider_job_id = f"rpj_missing_{attempt}"
+        call_id = await pipeline.open_call(job, "async_submit")
+        await pipeline.close_call(call_id, ProviderOutcome("accepted", 202, provider_job_id=provider_job_id))
+        assert await queue.mark_waiting_callback(job, provider_job_id)
+        body = json.dumps({"provider_job_id": provider_job_id, "media_id": media_id,
+                           "frames": [{"index": 0, "scores": partial, "checked_by": {"explicit": "nsfw"}}]}).encode()
+        sig = hmac.new(settings.provider_webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+        r = await api.post("/provider/callback", content=body, headers={"X-Signature": sig})
+        assert r.json()["result"] == "malformed"
+    status, seen = await wait_final(api, ADMIN_V, media_id, timeout=5)
+    assert status == "held" and "published" not in seen
+    assert (await api.get(f"/media/{media_id}", headers=ADMIN_V)).json()["reasons"] == ["provider_malformed"]
+
+
+def test_extra_frame_keys_like_checked_by_are_allowed():
+    full = {label: 0.1 for label in ALL_LABELS}
+    body = {"frames": [{"index": 0, "scores": full, "checked_by": {"explicit": "nsfw"}}]}
+    assert validate_frames(body, 1) == [full]

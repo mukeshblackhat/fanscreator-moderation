@@ -5,6 +5,7 @@ x-api-env: &api-env
   REDIS_URL: redis://redis:6379/0
   PROVIDER_URL: http://provider:8001
   REAL_PROVIDER_URL: http://real-provider:8002
+  MODERATION_PROVIDER: ${MODERATION_PROVIDER:-real}
   MEDIA_STORE: /media-store
   CALLBACK_URL: http://api:8000/provider/callback
   PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-change-me-in-real-life}
@@ -47,12 +48,11 @@ services:
       timeout: 3s
       retries: 30
 
-  # Optional: real uploads scored by a local open-source model (+ OpenAI moderation if
-  # OPENAI_API_KEY is set). Off by default; turn on with COMPOSE_PROFILES=real in .env
-  # or `docker compose --profile real up`. First build downloads torch and the model (~1 GB).
+  # Scores real uploads with a local open-source model (+ OpenAI moderation if
+  # OPENAI_API_KEY is set) when MODERATION_PROVIDER=real. First build downloads torch
+  # and the model (~1 GB); loading the model takes about a minute.
   real-provider:
     build: ./provider_real
-    profiles: ["real"]
     environment:
       PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-change-me-in-real-life}
       MEDIA_STORE: /media-store
@@ -64,7 +64,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 60
-      start_period: 60s
+      start_period: 90s
 
   api:
     build: ./api
@@ -91,6 +91,9 @@ services:
       replicas: 2
     depends_on:
       api: { condition: service_healthy }
+      # Wait for the model so the first real upload is not held. Not required: with
+      # MODERATION_PROVIDER=mock the workers start even if the real provider never comes up.
+      real-provider: { condition: service_healthy, required: false }
 
   web:
     build: ./web

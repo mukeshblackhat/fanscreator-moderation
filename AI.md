@@ -23,6 +23,10 @@ Nothing was marked done without running it. The outputs are committed in [`docs/
 - **Compose from clean.** `docker compose build --no-cache` and `docker compose up` on macOS (Docker 29.6, Compose 5.3). Every service was healthy, and a smoke run covered publish, block over the async callback, the refused prompt (422), isolation (404/403/401), and an outage hold with 409 on approve and automatic recovery. Unchecked published stayed 0.
 - **Ledger against the provider.** The ledger was compared with the provider's own call counts, and successful scores per media were counted in the database (723 of 723 exactly once).
 
+## The real provider add-on (22 Nov 2026)
+
+Claude agents built the provider cascade (`provider_real/`), the `MODERATION_PROVIDER` adapter in the API and Compose, and the pricing research. Checks: the provider and API test suites (provider_real 10, api 218, provider 6, web 22), with the new hold rules driven by a stub model so each prohibited path runs without real prohibited images. Mutation checks (breaking the code on purpose) confirmed the new tests can fail. Every price in the README comes from a vendor page fetched on 22 Nov 2026 and is linked there. The research caught one wrong earlier suggestion: the October Part 3 answer recommended Hive at low volume, but Hive's self-serve plan stops at 100 requests a day, so it can't be tier 3 without a contract. It also ruled out OpenAI for minors: its `sexual/minors` category is text only, so age stays with CLIP plus a hold. Not verified at the time of writing: the Docker build of the two-model image.
+
 ## Mistakes that were caught
 
 - **The media format was transcribed wrong at the start.** The plan I built from used nested frames (`{"scores": {...}}`) and `"source": "generated"`. Checking against the task page late in the work showed the real format is flat frames and `"generation"`. Against the running stack, the task's own example got a 422 and a flat `{"minor": 0.95}` image was published, because its scores were read as zeros. That would have failed most of the graders' checks. Fixed by accepting the task's format (keeping the old one), adding tests built from the task's exact example, switching every test, script and the UI to the official format, and re-running all the evidence.
@@ -40,4 +44,5 @@ The running log, with what was wrong and what changed, is [`docs/ai-log.md`](doc
 - The full workload and the crash test were run against local services, not inside `docker compose` (compose itself was verified with a clean build and a smoke run, see below).
 - Behaviour under a real network partition, an OOM kill mid-commit, a Postgres failover, or clock skew (see the crash test section of the README).
 - Prompt gate quality beyond the 30 listed cases. Rules are weak by nature.
-- Vendor prices in Part 3 are list prices checked in October 2026, not quotes.
+- Vendor prices in the README are list prices checked on 22 Nov 2026, not quotes. The tier 3 share (y = 5%) is an assumption.
+- The real provider's thresholds were calibrated on 22 benign photos. Its prohibited-category paths are tested with a stub model, never on real prohibited images.

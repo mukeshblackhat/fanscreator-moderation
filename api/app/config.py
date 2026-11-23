@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://moderation:moderation@localhost:5432/moderation"
     redis_url: str = "redis://localhost:6379/0"
     provider_url: str = "http://localhost:8001"
-    # Real uploads (optional "real" compose profile)
     real_provider_url: str = "http://localhost:8002"
+    # Which provider scores real file uploads: "real" (REAL_PROVIDER_URL) or "mock"
+    # (PROVIDER_URL, so a test mock can be swapped in). JSON test documents always use PROVIDER_URL.
+    moderation_provider: Literal["real", "mock"] = "real"
     media_store: str = "/media-store"
     max_image_mb: int = 25
     max_video_mb: int = 200

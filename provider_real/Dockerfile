@@ -9,10 +9,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 RUN uv pip install --python /opt/venv/bin/python --index-url https://download.pytorch.org/whl/cpu "torch==2.15.0" torchvision \
  && uv pip install --python /opt/venv/bin/python "transformers==5.22.0"
-ARG REAL_MODEL=Falconsai/nsfw_image_detection
-ENV REAL_MODEL=$REAL_MODEL
-# Bake the model into the image so the service starts offline and fast.
-RUN python -c "import os; from transformers import pipeline; pipeline('image-classification', model=os.environ['REAL_MODEL'])"
+# Bake both tier-1 models, at the revisions pinned in scorers.py, into the image so the
+# service starts offline and fast. Loading them is the download.
+COPY realprovider/__init__.py realprovider/scorers.py realprovider/
+RUN python -c "from realprovider import scorers; scorers.load_tier1()"
 ENV HF_HUB_OFFLINE=1
 COPY . .
 EXPOSE 8002
